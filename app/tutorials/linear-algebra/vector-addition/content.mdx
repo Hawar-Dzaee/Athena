@@ -1,0 +1,84 @@
+import { VectorAdditionPlayground2D } from "./components/VectorAdditionPlayground2D";
+import { VectorAdditionScene3D } from "./components/VectorAdditionScene3D";
+
+# Vector addition, geometrically
+
+A **vector** is just a list of numbers — but that framing throws away most of the
+intuition. The numbers are coordinates, and coordinates describe a *displacement*:
+"go right 3, go up 1." Vector addition is what happens when you do one
+displacement after another.
+
+Drag the colored circles below. Vector $\mathbf{a}$ is indigo, $\mathbf{b}$ is rose,
+and their sum $\mathbf{a} + \mathbf{b}$ is the emerald arrow.
+
+<VectorAdditionPlayground2D />
+
+Notice the dashed lines. They're copies of $\mathbf{a}$ and $\mathbf{b}$ moved to
+the *tip* of the other vector. That's the whole rule:
+
+> **To add two vectors, lay them tip-to-tail. The sum is the arrow from the start of the first to the tip of the second.**
+
+The two dashed lines plus the two solid ones make a parallelogram. This isn't a
+coincidence — it's the same fact viewed two ways. You can think of $\mathbf{a} + \mathbf{b}$
+as either:
+
+1. Walk along $\mathbf{a}$, then walk along $\mathbf{b}$ (tip-to-tail), or
+2. Walk along $\mathbf{b}$, then walk along $\mathbf{a}$.
+
+You end up at the same place. That's why **vector addition is commutative**:
+
+$$
+\mathbf{a} + \mathbf{b} = \mathbf{b} + \mathbf{a}.
+$$
+
+## The component view
+
+Geometrically, addition is "tip-to-tail." Algebraically, it's just adding
+coordinates separately:
+
+$$
+\mathbf{a} + \mathbf{b}
+= \begin{bmatrix} a_x \\\\ a_y \end{bmatrix}
++ \begin{bmatrix} b_x \\\\ b_y \end{bmatrix}
+= \begin{bmatrix} a_x + b_x \\\\ a_y + b_y \end{bmatrix}.
+$$
+
+Both views are the same fact in different clothing. In code:
+
+```ts
+type Vec2 = { x: number; y: number };
+
+function add(a: Vec2, b: Vec2): Vec2 {
+  return { x: a.x + b.x, y: a.y + b.y };
+}
+```
+
+That's it. The geometry justifies the formula; the formula generalizes to any
+number of dimensions.
+
+## In three dimensions
+
+Everything you just learned is true in 3D, with one extra coordinate. The
+parallelogram still exists — it's just tilted in space now. Orbit the camera by
+dragging inside the canvas, and use the sliders to change each component.
+
+<VectorAdditionScene3D />
+
+Spin it around. Notice that the parallelogram is *flat* — it lies in a 2D plane
+inside 3D space. Two vectors always span a plane (unless they're parallel, in
+which case they span a line). That's a foreshadowing of a much bigger idea: the
+**span** of a set of vectors is the space you can reach by adding scaled copies
+of them. We'll get there.
+
+## What this is teaching you
+
+If you took only one thing away, it should be this: **a vector is a movement, and
+adding vectors is just doing one movement after another.** Every other operation
+in linear algebra — scaling, dot products, matrix multiplication, projections —
+ultimately cashes out into "what does this *do* to a vector?" Holding on to the
+geometric picture is what keeps the algebra honest.
+
+---
+
+*Next up: scaling vectors and what it means to "stretch" space. Then the dot
+product, which is where the geometry starts paying off.*
