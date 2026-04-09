@@ -11,11 +11,14 @@ import * as THREE from "three";
  * Dragging in 3D with a mouse is fiddly and unreliable for new users, so this
  * uses sliders for each component. Orbit the camera with the mouse to see how
  * the parallelogram lives in 3-space.
+ *
+ * Three.js/WebGL can't consume CSS variables, so colors are hardcoded hex
+ * values that match the --vec-* tokens in globals.css.
  */
 
-const A_COLOR = "#7c5cff"; // indigo
-const B_COLOR = "#ff5f6d"; // rose
-const SUM_COLOR = "#22c799"; // emerald
+const A_COLOR = "#7c5cff"; // indigo  (matches --vec-a)
+const B_COLOR = "#ff5f6d"; // rose    (matches --vec-b)
+const SUM_COLOR = "#22c799"; // emerald (matches --vec-sum)
 
 type Vec3 = [number, number, number];
 

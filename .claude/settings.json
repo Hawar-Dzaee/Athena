@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api:*)",
+      "Bash(npm --version)",
+      "Bash(npx --yes create-next-app@latest . --typescript --tailwind --app --no-src-dir --import-alias \"@/*\" --use-npm --eslint --no-turbopack --yes)",
+      "Read(//private/tmp/**)",
+      "Bash(rm -rf athena-scaffold)",
+      "Bash(npx --yes create-next-app@latest athena-scaffold --typescript --tailwind --app --no-src-dir --import-alias \"@/*\" --use-npm --eslint --no-turbopack --yes)",
+      "Bash(rm -rf .git .next CLAUDE.md AGENTS.md)",
+      "Bash(cp -R . /Users/hawardzaee/Desktop/Galaxy/Athena/)",
+      "Bash(npm install:*)",
+      "Bash(npm cache:*)",
+      "Bash(npx tsc:*)"
+    ],
+    "additionalDirectories": [
+      "/private/tmp/athena-scaffold"
+    ]
+  }
+}

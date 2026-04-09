@@ -127,14 +127,6 @@ export function VectorAdditionPlayground2D() {
               </pattern>
             </defs>
 
-            <style>{`
-              :where(svg) {
-                --color-vec-a: oklch(0.55 0.18 265);
-                --color-vec-b: oklch(0.62 0.2 15);
-                --color-vec-sum: oklch(0.62 0.16 165);
-              }
-            `}</style>
-
             {/* Background grid */}
             <rect width={VIEW} height={VIEW} fill="url(#grid-minor)" />
 
@@ -259,15 +251,15 @@ export function VectorAdditionPlayground2D() {
         </div>
 
         <aside className="flex w-full flex-col gap-4 md:w-56">
-          <Readout label="a" color="oklch(0.55 0.18 265)" v={a} />
-          <Readout label="b" color="oklch(0.62 0.2 15)" v={b} />
-          <Readout label="a + b" color="oklch(0.62 0.16 165)" v={sum} highlight />
+          <Readout label="a" color="var(--color-vec-a)" v={a} />
+          <Readout label="b" color="var(--color-vec-b)" v={b} />
+          <Readout label="a + b" color="var(--color-vec-sum)" v={sum} highlight />
           <label className="mt-2 flex items-center gap-2 text-sm text-foreground/70">
             <input
               type="checkbox"
               checked={snap}
               onChange={(e) => setSnap(e.target.checked)}
-              className="h-4 w-4 accent-[oklch(0.55_0.18_265)]"
+              className="h-4 w-4 accent-vec-a"
             />
             Snap to integer grid
           </label>

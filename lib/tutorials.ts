@@ -6,7 +6,7 @@
  * which keeps the landing page in sync without scanning the filesystem.
  */
 
-export type Topic = "linear-algebra" | "statistics" | "probability" | "deep-learning";
+export type Topic = "linear-algebra" | "statistics" | "probability" | "deep-learning" | "pytorch";
 
 export type TutorialStatus = "ready" | "wip" | "planned";
 
@@ -41,6 +41,11 @@ export const TOPICS: Record<Topic, { label: string; description: string; accent:
     description: "Architectures, training dynamics, intuition pumps.",
     accent: "from-rose-500 to-pink-500",
   },
+  pytorch: {
+    label: "PyTorch",
+    description: "Interactive PyTorch playground — run real code in the browser.",
+    accent: "from-red-500 to-orange-500",
+  },
 };
 
 export const TUTORIALS: Tutorial[] = [
@@ -52,6 +57,13 @@ export const TUTORIALS: Tutorial[] = [
       "Drag two vectors and watch their sum update — in 2D and 3D. The first concept in Athena.",
     status: "ready",
     minutes: 6,
+  },
+  {
+    slug: "playground",
+    topic: "pytorch",
+    title: "PyTorch Playground",
+    blurb: "Write and run PyTorch code interactively, notebook-style.",
+    status: "ready",
   },
 ];
 
