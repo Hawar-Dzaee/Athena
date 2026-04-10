@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import cifar from "../data/cifar10-samples.json";
+import TransformChatBot from "./TransformChatBot";
 
 interface Sample {
   index: number;
@@ -13,161 +14,8 @@ interface Sample {
 const samples = cifar.samples as Sample[];
 const classes = cifar.classes as string[];
 
-type TransformName = "RandomResizedCrop" | "ColorJitter";
-const ALL_TRANSFORMS: TransformName[] = ["RandomResizedCrop", "ColorJitter"];
-
-/* ── RandomResizedCrop (mirrors PyTorch logic) ─────────────────────── */
-
-function randomResizedCrop(
-  sourceCanvas: HTMLCanvasElement,
-  outputSize: number,
-  scaleMin: number,
-  scaleMax: number,
-  ratioMin: number,
-  ratioMax: number,
-): { canvas: HTMLCanvasElement; cropRect: { x: number; y: number; w: number; h: number } } {
-  const w = sourceCanvas.width;
-  const h = sourceCanvas.height;
-  const area = w * h;
-
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const targetArea = area * (scaleMin + Math.random() * (scaleMax - scaleMin));
-    const logRatioMin = Math.log(ratioMin);
-    const logRatioMax = Math.log(ratioMax);
-    const aspectRatio = Math.exp(logRatioMin + Math.random() * (logRatioMax - logRatioMin));
-
-    const cropW = Math.round(Math.sqrt(targetArea * aspectRatio));
-    const cropH = Math.round(Math.sqrt(targetArea / aspectRatio));
-
-    if (cropW <= w && cropH <= h) {
-      const x = Math.floor(Math.random() * (w - cropW + 1));
-      const y = Math.floor(Math.random() * (h - cropH + 1));
-
-      const out = document.createElement("canvas");
-      out.width = outputSize;
-      out.height = outputSize;
-      const ctx = out.getContext("2d")!;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sourceCanvas, x, y, cropW, cropH, 0, 0, outputSize, outputSize);
-      return { canvas: out, cropRect: { x, y, w: cropW, h: cropH } };
-    }
-  }
-
-  // Fallback: centre crop
-  const inRatio = w / h;
-  let cropW: number, cropH: number;
-  if (inRatio < ratioMin) {
-    cropW = w;
-    cropH = Math.round(w / ratioMin);
-  } else if (inRatio > ratioMax) {
-    cropH = h;
-    cropW = Math.round(h * ratioMax);
-  } else {
-    cropW = w;
-    cropH = h;
-  }
-  const x = Math.floor((w - cropW) / 2);
-  const y = Math.floor((h - cropH) / 2);
-
-  const out = document.createElement("canvas");
-  out.width = outputSize;
-  out.height = outputSize;
-  const ctx = out.getContext("2d")!;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(sourceCanvas, x, y, cropW, cropH, 0, 0, outputSize, outputSize);
-  return { canvas: out, cropRect: { x, y, w: cropW, h: cropH } };
-}
-
-/* ── ColorJitter (mirrors PyTorch logic) ──────────────────────────── */
-
-function colorJitter(
-  sourceCanvas: HTMLCanvasElement,
-  brightness: number,
-  contrast: number,
-  saturation: number,
-  hue: number,
-): HTMLCanvasElement {
-  const w = sourceCanvas.width;
-  const h = sourceCanvas.height;
-  const out = document.createElement("canvas");
-  out.width = w;
-  out.height = h;
-  const ctx = out.getContext("2d")!;
-
-  // PyTorch samples uniformly from [max(0,1-v), 1+v] for brightness/contrast/saturation
-  const bFactor = 1 - brightness + Math.random() * 2 * brightness;
-  const cFactor = 1 - contrast + Math.random() * 2 * contrast;
-  const sFactor = 1 - saturation + Math.random() * 2 * saturation;
-  // Hue: uniform in [-hue, hue], applied as rotation in degrees (*360)
-  const hShift = (-hue + Math.random() * 2 * hue) * 360;
-
-  // Read pixels
-  const srcCtx = sourceCanvas.getContext("2d")!;
-  const srcData = srcCtx.getImageData(0, 0, w, h);
-  const outData = ctx.createImageData(w, h);
-  const src = srcData.data;
-  const dst = outData.data;
-
-  for (let i = 0; i < src.length; i += 4) {
-    let r = src[i] / 255;
-    let g = src[i + 1] / 255;
-    let b = src[i + 2] / 255;
-
-    // Brightness
-    r *= bFactor; g *= bFactor; b *= bFactor;
-
-    // Contrast (around mean gray)
-    r = cFactor * (r - 0.5) + 0.5;
-    g = cFactor * (g - 0.5) + 0.5;
-    b = cFactor * (b - 0.5) + 0.5;
-
-    // Saturation (desaturate toward luminance)
-    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    r = sFactor * (r - lum) + lum;
-    g = sFactor * (g - lum) + lum;
-    b = sFactor * (b - lum) + lum;
-
-    // Hue rotation via HSL
-    const [hh, ss, ll] = rgbToHsl(r, g, b);
-    const [nr, ng, nb] = hslToRgb(((hh + hShift / 360) % 1 + 1) % 1, ss, ll);
-    r = nr; g = ng; b = nb;
-
-    dst[i] = Math.round(Math.min(1, Math.max(0, r)) * 255);
-    dst[i + 1] = Math.round(Math.min(1, Math.max(0, g)) * 255);
-    dst[i + 2] = Math.round(Math.min(1, Math.max(0, b)) * 255);
-    dst[i + 3] = src[i + 3];
-  }
-
-  ctx.putImageData(outData, 0, 0);
-  return out;
-}
-
-function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l];
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h = 0;
-  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-  else if (max === g) h = ((b - r) / d + 2) / 6;
-  else h = ((r - g) / d + 4) / 6;
-  return [h, s, l];
-}
-
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  if (s === 0) return [l, l, l];
-  const hue2rgb = (p: number, q: number, t: number) => {
-    if (t < 0) t += 1; if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  return [hue2rgb(p, q, h + 1 / 3), hue2rgb(p, q, h), hue2rgb(p, q, h - 1 / 3)];
-}
+type TransformName = "RandomResizedCrop" | "ColorJitter" | "Grayscale" | "Solarize";
+const ALL_TRANSFORMS: TransformName[] = ["RandomResizedCrop", "ColorJitter", "Grayscale", "Solarize"];
 
 /* ── Main component ────────────────────────────────────────────────── */
 
@@ -186,12 +34,17 @@ export default function CifarExplorer() {
   const [cjContrast, setCjContrast] = useState(0.4);
   const [cjSaturation, setCjSaturation] = useState(0.2);
   const [cjHue, setCjHue] = useState(0.1);
-  const [cjProb, setCjProb] = useState(0.8);
+
+  // Grayscale params
+  const [gsChannels, setGsChannels] = useState<1 | 3>(1);
+
+  // Solarize params (transforms.functional)
+  const [solarizeThreshold, setSolarizeThreshold] = useState(128);
 
   // Transform result
   const [resultDataUrl, setResultDataUrl] = useState<string | null>(null);
   const [cropRect, setCropRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const filtered = useMemo(
     () =>
@@ -208,20 +61,10 @@ export default function CifarExplorer() {
 
   const sample = filtered[safeIndex];
 
-  // Load source image into hidden canvas
+  // Clear result when sample changes
   useEffect(() => {
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement("canvas");
-      c.width = img.width;
-      c.height = img.height;
-      const ctx = c.getContext("2d")!;
-      ctx.drawImage(img, 0, 0);
-      sourceCanvasRef.current = c;
-      setResultDataUrl(null);
-      setCropRect(null);
-    };
-    img.src = `data:image/png;base64,${sample.image}`;
+    setResultDataUrl(null);
+    setCropRect(null);
   }, [sample]);
 
   const toggleTransform = useCallback((name: TransformName) => {
@@ -232,29 +75,60 @@ export default function CifarExplorer() {
     setCropRect(null);
   }, []);
 
-  const applyTransform = useCallback(() => {
-    if (!sourceCanvasRef.current || enabled.length === 0) return;
+  const applyTransform = useCallback(async () => {
+    if (enabled.length === 0 || loading) return;
 
-    let current = sourceCanvasRef.current;
-    let rect: { x: number; y: number; w: number; h: number } | null = null;
+    // Build the transforms list for the Python backend
+    const transforms: { name: string; params: Record<string, number> }[] = [];
 
-    // Apply transforms in selection order
     for (const name of enabled) {
-
       if (name === "RandomResizedCrop") {
-        const result = randomResizedCrop(current, outputSize, scaleMin, scaleMax, 0.75, 1.33);
-        current = result.canvas;
-        rect = result.cropRect;
+        transforms.push({
+          name: "RandomResizedCrop",
+          params: { size: outputSize, scale_min: scaleMin, scale_max: scaleMax },
+        });
       } else if (name === "ColorJitter") {
-        if (Math.random() <= cjProb) {
-          current = colorJitter(current, cjBrightness, cjContrast, cjSaturation, cjHue);
-        }
+        transforms.push({
+          name: "ColorJitter",
+          params: { brightness: cjBrightness, contrast: cjContrast, saturation: cjSaturation, hue: cjHue },
+        });
+      } else if (name === "Grayscale") {
+        transforms.push({
+          name: "Grayscale",
+          params: { num_output_channels: gsChannels },
+        });
+      } else if (name === "Solarize") {
+        transforms.push({
+          name: "Solarize",
+          params: { threshold: solarizeThreshold },
+        });
       }
     }
 
-    setResultDataUrl(current.toDataURL());
-    setCropRect(rect);
-  }, [enabled, outputSize, scaleMin, scaleMax, cjBrightness, cjContrast, cjSaturation, cjHue, cjProb]);
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/transform", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: sample.image, transforms }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        console.error("Transform error:", data.error);
+        return;
+      }
+
+      setResultDataUrl(`data:image/png;base64,${data.image}`);
+      setCropRect(data.crop_rect ?? null);
+    } catch (err) {
+      console.error("Transform request failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [enabled, loading, sample.image, outputSize, scaleMin, scaleMax, cjBrightness, cjContrast, cjSaturation, cjHue, gsChannels]);
 
   return (
     <div className="not-prose my-8 rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -345,7 +219,9 @@ export default function CifarExplorer() {
 
         {enabled.length > 0 && (
           <div className="rounded-lg border border-border bg-muted p-2 flex items-center justify-center flex-shrink-0" style={{ minWidth: 128, minHeight: 128 }}>
-            {resultDataUrl ? (
+            {loading ? (
+              <span className="text-xs text-muted-foreground animate-pulse">Running torchvision...</span>
+            ) : resultDataUrl ? (
               <img
                 src={resultDataUrl}
                 alt={`Transformed: ${sample.className}`}
@@ -477,16 +353,49 @@ export default function CifarExplorer() {
                   className="w-16 rounded border border-border bg-card px-2 py-0.5 text-center text-sm tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   aria-label="Hue"
                 />
-                <span className="text-muted-foreground">,</span>
+                {"\n"}
+                <span className="text-muted-foreground">)</span>
+              </pre>
+            )}
+
+            {name === "Grayscale" && (
+              <pre className="rounded-lg bg-muted px-5 py-4 text-sm font-mono text-foreground leading-relaxed overflow-x-auto">
+                <span className="text-muted-foreground">transforms.</span>
+                <span>Grayscale</span>
+                <span className="text-muted-foreground">(</span>
                 {"\n"}
                 <span>{"    "}</span>
-                <span className="text-accent">prob</span>
+                <span className="text-accent">num_output_channels</span>
+                <span className="text-muted-foreground">=</span>
+                <select
+                  value={gsChannels}
+                  onChange={(e) => setGsChannels(Number(e.target.value) as 1 | 3)}
+                  className="rounded border border-border bg-card px-2 py-0.5 text-center text-sm tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  aria-label="Number of output channels"
+                >
+                  <option value={1}>1</option>
+                  <option value={3}>3</option>
+                </select>
+                {"\n"}
+                <span className="text-muted-foreground">)</span>
+              </pre>
+            )}
+
+            {name === "Solarize" && (
+              <pre className="rounded-lg bg-muted px-5 py-4 text-sm font-mono text-foreground leading-relaxed overflow-x-auto">
+                <span className="text-muted-foreground">transforms.functional.</span>
+                <span>solarize</span>
+                <span className="text-muted-foreground">(</span>
+                <span className="text-muted-foreground">img, </span>
+                {"\n"}
+                <span>{"    "}</span>
+                <span className="text-accent">threshold</span>
                 <span className="text-muted-foreground">=</span>
                 <input
-                  type="number" min={0} max={1} step={0.1} value={cjProb}
-                  onChange={(e) => { const v = Number(e.target.value); if (v >= 0 && v <= 1) setCjProb(v); }}
+                  type="number" min={0} max={255} value={solarizeThreshold}
+                  onChange={(e) => { const v = Number(e.target.value); if (v >= 0 && v <= 255) setSolarizeThreshold(v); }}
                   className="w-16 rounded border border-border bg-card px-2 py-0.5 text-center text-sm tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  aria-label="Probability"
+                  aria-label="Solarize threshold"
                 />
                 {"\n"}
                 <span className="text-muted-foreground">)</span>
@@ -500,10 +409,11 @@ export default function CifarExplorer() {
           <div className="flex items-center gap-3">
             <button
               onClick={applyTransform}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-ring"
+              disabled={loading}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ring"
               aria-label="Apply transforms"
             >
-              Apply
+              {loading ? "Running..." : "Apply"}
             </button>
             <button
               onClick={() => { setEnabled([]); setResultDataUrl(null); setCropRect(null); }}
@@ -515,6 +425,9 @@ export default function CifarExplorer() {
           </div>
         )}
       </div>
+
+      {/* ── Floating chatbot ── */}
+      <TransformChatBot />
     </div>
   );
 }
