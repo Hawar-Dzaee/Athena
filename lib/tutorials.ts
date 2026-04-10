@@ -65,6 +65,15 @@ export const TUTORIALS: Tutorial[] = [
     blurb: "Write and run PyTorch code interactively, notebook-style.",
     status: "ready",
   },
+  {
+    slug: "transformation",
+    topic: "pytorch",
+    title: "Transformations",
+    blurb:
+      "Explore CIFAR-10 samples and learn how PyTorch transforms preprocess images for training.",
+    status: "ready",
+    minutes: 5,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {
