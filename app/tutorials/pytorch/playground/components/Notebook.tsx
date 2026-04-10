@@ -127,7 +127,7 @@ export default function Notebook() {
       <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-card px-4 py-2.5">
         <label
           htmlFor="framework-select"
-          className="text-xs font-semibold tracking-wide text-foreground/50 uppercase"
+          className="text-xs font-semibold tracking-wide text-foreground/70 uppercase"
         >
           Framework
         </label>
@@ -143,7 +143,7 @@ export default function Notebook() {
             </option>
           ))}
         </select>
-        <span className="text-xs text-foreground/40">
+        <span className="text-xs text-foreground/60">
           {sessionReady ? "\u25CF Session active" : "\u25CB Starting\u2026"}
         </span>
       </div>
@@ -180,7 +180,7 @@ export default function Notebook() {
         <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center opacity-0 transition group-hover/add:opacity-100">
           <button
             onClick={(e) => { e.stopPropagation(); addCell("code"); }}
-            className="pointer-events-auto rounded-md border border-border/60 bg-card px-3 py-1 text-xs text-foreground/50 shadow-sm transition hover:border-border hover:text-foreground/80"
+            className="pointer-events-auto rounded-md border border-border/60 bg-card px-3 py-1 text-xs text-foreground/70 shadow-sm transition hover:border-border hover:text-foreground"
             aria-label="Add code cell"
           >
             + Code

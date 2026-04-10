@@ -11,7 +11,7 @@ export function Sidebar({ topics }: { topics: Topic[] }) {
           const items = tutorialsByTopic(topic);
           return (
             <div key={topic}>
-              <h3 className="text-xs font-semibold tracking-[0.15em] text-foreground/50 uppercase">
+              <h3 className="text-xs font-semibold tracking-[0.15em] text-foreground/70 uppercase">
                 {meta.label}
               </h3>
               {items.length > 0 ? (
@@ -20,7 +20,7 @@ export function Sidebar({ topics }: { topics: Topic[] }) {
                     <li key={t.slug}>
                       <Link
                         href={tutorialPath(t)}
-                        className="block rounded-md px-2 py-1.5 text-sm text-foreground/70 transition hover:bg-muted/50 hover:text-foreground"
+                        className="block rounded-md px-2 py-1.5 text-sm text-foreground/80 transition hover:bg-muted/50 hover:text-foreground"
                       >
                         {t.title}
                       </Link>
@@ -28,7 +28,7 @@ export function Sidebar({ topics }: { topics: Topic[] }) {
                   ))}
                 </ul>
               ) : (
-                <p className="mt-2 text-xs italic text-foreground/35">Coming soon</p>
+                <p className="mt-2 text-xs italic text-foreground/50">Coming soon</p>
               )}
             </div>
           );

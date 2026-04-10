@@ -77,7 +77,7 @@ export function CodeCell({
         >
           {cell.running ? "\u23F3" : "\u25B6"}
         </button>
-        <span className="mt-0.5 font-mono text-[10px] text-foreground/30">{index + 1}</span>
+        <span className="mt-0.5 font-mono text-[10px] text-foreground/50">{index + 1}</span>
       </div>
 
       {/* Cell body */}
@@ -87,10 +87,10 @@ export function CodeCell({
           {onDelete && (
             <button
               onClick={onDelete}
-              className="absolute right-2 top-1.5 rounded px-1.5 py-0.5 text-xs text-foreground/40 opacity-0 transition hover:text-red-500 group-hover:opacity-100"
+              className="absolute right-2 top-1.5 rounded px-1.5 py-0.5 text-xs text-foreground/60 opacity-0 transition hover:text-red-500 group-hover:opacity-100"
               aria-label="Delete cell"
             >
-              \u2715
+              {"\u2715"}
             </button>
           )}
         </div>
@@ -98,7 +98,7 @@ export function CodeCell({
         {(cell.output || cell.error) && (
           <div className="border-t border-border/40 bg-muted/30 px-4 py-3">
             {cell.output && (
-              <pre className="whitespace-pre-wrap font-mono text-sm text-foreground/80">
+              <pre className="whitespace-pre-wrap font-mono text-sm text-foreground/90">
                 {cell.output}
               </pre>
             )}

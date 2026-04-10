@@ -138,7 +138,7 @@ export function VectorAdditionPlayground2D() {
               y2={ORIGIN}
               stroke="currentColor"
               strokeWidth={1}
-              className="text-foreground/40"
+              className="text-foreground/60"
             />
             <line
               x1={ORIGIN}
@@ -147,7 +147,7 @@ export function VectorAdditionPlayground2D() {
               y2={VIEW - PADDING}
               stroke="currentColor"
               strokeWidth={1}
-              className="text-foreground/40"
+              className="text-foreground/60"
             />
 
             {/* Parallelogram */}
