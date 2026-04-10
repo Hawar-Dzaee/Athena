@@ -5,6 +5,7 @@ import { TOPICS, type Topic } from "@/lib/tutorials";
 import { SiteHeader } from "./components/SiteHeader";
 import { Sidebar } from "./components/Sidebar";
 import { SiteFooter } from "./components/SiteFooter";
+import { SidebarProvider, SidebarWrapper } from "./components/SidebarToggle";
 
 import "./globals.css";
 
@@ -41,12 +42,16 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
-        <SiteHeader />
-        <div className="flex flex-1">
-          <Sidebar topics={topics} />
-          <main className="flex-1">{children}</main>
-        </div>
-        <SiteFooter />
+        <SidebarProvider>
+          <SiteHeader />
+          <div className="flex flex-1">
+            <SidebarWrapper>
+              <Sidebar topics={topics} />
+            </SidebarWrapper>
+            <main className="flex-1">{children}</main>
+          </div>
+          <SiteFooter />
+        </SidebarProvider>
       </body>
     </html>
   );
