@@ -74,6 +74,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 5,
   },
+  {
+    slug: "resnet18",
+    topic: "deep-learning",
+    title: "ResNet-18, module by module",
+    blurb:
+      "An interactive diagram of torchvision.models.resnet18() — every block, every skip, every parameter count.",
+    status: "ready",
+    minutes: 8,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {

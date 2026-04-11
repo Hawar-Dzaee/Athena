@@ -1,0 +1,15 @@
+import { ResNet18Diagram } from "./components/ResNet18Diagram";
+
+# ResNet-18, module by module
+
+ResNet-18 is the smallest member of the original [Deep Residual Learning](https://arxiv.org/abs/1512.03385)
+family — a stack of eight residual blocks wrapped in a stem and a classifier.
+It's small enough to hold in your head, which makes it the perfect first
+architecture to actually *understand* rather than treat as a black box.
+
+The diagram below is grounded directly in
+`torchvision.models.resnet18()`. Every node is a module that function returns;
+every channel count, stride, kernel, and parameter count you see matches what
+you get from calling it.
+
+<ResNet18Diagram />
