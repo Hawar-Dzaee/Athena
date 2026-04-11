@@ -22,7 +22,6 @@
 
 # misc
 .DS_Store
-/.chat/
 *.pem
 
 # debug

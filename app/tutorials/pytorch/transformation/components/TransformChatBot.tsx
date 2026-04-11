@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 
+const PLACEHOLDER_REPLY =
+  "Under construction — this chat isn't wired up to a real assistant yet.";
+
 /* ── Simple markdown-ish rendering ────────────────────────────────── */
 
 function renderMarkdown(text: string) {
@@ -40,11 +43,10 @@ export default function TransformChatBot() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "bot",
-      text: "Hi! Ask me anything about the transforms — your question goes straight to Claude Code.",
+      text: "Hi! This chat is a placeholder — it isn't connected to a real assistant yet.",
     },
   ]);
   const [input, setInput] = useState("");
-  const [waiting, setWaiting] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -56,52 +58,17 @@ export default function TransformChatBot() {
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  const send = useCallback(async () => {
+  const send = useCallback(() => {
     const q = input.trim();
-    if (!q || waiting) return;
+    if (!q) return;
 
-    const id = crypto.randomUUID();
-
-    setMessages((prev) => [...prev, { role: "user", text: q }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: q },
+      { role: "bot", text: PLACEHOLDER_REPLY },
+    ]);
     setInput("");
-    setWaiting(true);
-
-    // Send question to the API route
-    await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q, id }),
-    });
-
-    // Poll for Claude Code's response
-    const poll = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/chat?id=${id}`);
-        const data = await res.json();
-        if (data.ready) {
-          clearInterval(poll);
-          setMessages((prev) => [...prev, { role: "bot", text: data.answer }]);
-          setWaiting(false);
-        }
-      } catch {
-        // keep polling
-      }
-    }, 1000);
-
-    // Safety timeout — stop polling after 5 minutes
-    setTimeout(() => {
-      clearInterval(poll);
-      setWaiting((w) => {
-        if (w) {
-          setMessages((prev) => [
-            ...prev,
-            { role: "bot", text: "Timed out waiting for a response. Make sure Claude Code is running and monitoring." },
-          ]);
-        }
-        return false;
-      });
-    }, 300_000);
-  }, [input, waiting]);
+  }, [input]);
 
   return (
     <>
@@ -154,11 +121,6 @@ export default function TransformChatBot() {
                 {msg.role === "bot" ? renderMarkdown(msg.text) : msg.text}
               </div>
             ))}
-            {waiting && (
-              <div className="mr-8 rounded-lg rounded-bl-sm bg-muted px-3 py-2 text-sm text-muted-foreground italic">
-                Waiting for Claude Code...
-              </div>
-            )}
             <div ref={bottomRef} />
           </div>
 
@@ -176,14 +138,13 @@ export default function TransformChatBot() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={waiting ? "Waiting..." : "Ask about a parameter..."}
-                disabled={waiting}
-                className="flex-1 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Ask about a parameter..."
+                className="flex-1 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 aria-label="Type your question"
               />
               <button
                 type="submit"
-                disabled={!input.trim() || waiting}
+                disabled={!input.trim()}
                 className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-40 hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-ring"
                 aria-label="Send message"
               >
