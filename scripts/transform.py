@@ -74,6 +74,9 @@ def apply_transforms(image_b64: str, transforms: list[dict]) -> dict:
             thresh = params.get("threshold", 128)
             img = F.solarize(img, thresh)
 
+        elif name == "HorizontalFlip":
+            img = F.hflip(img)
+
     # Encode result → base64 PNG
     buf = io.BytesIO()
     img.save(buf, format="PNG")

@@ -14,8 +14,8 @@ interface Sample {
 const samples = cifar.samples as Sample[];
 const classes = cifar.classes as string[];
 
-type TransformName = "RandomResizedCrop" | "ColorJitter" | "Grayscale" | "Solarize";
-const ALL_TRANSFORMS: TransformName[] = ["RandomResizedCrop", "ColorJitter", "Grayscale", "Solarize"];
+type TransformName = "RandomResizedCrop" | "ColorJitter" | "Grayscale" | "Solarize" | "HorizontalFlip";
+const ALL_TRANSFORMS: TransformName[] = ["RandomResizedCrop", "ColorJitter", "Grayscale", "Solarize", "HorizontalFlip"];
 
 /* ── Main component ────────────────────────────────────────────────── */
 
@@ -101,6 +101,11 @@ export default function CifarExplorer() {
         transforms.push({
           name: "Solarize",
           params: { threshold: solarizeThreshold },
+        });
+      } else if (name === "HorizontalFlip") {
+        transforms.push({
+          name: "HorizontalFlip",
+          params: {},
         });
       }
     }
@@ -398,6 +403,16 @@ export default function CifarExplorer() {
                   aria-label="Solarize threshold"
                 />
                 {"\n"}
+                <span className="text-muted-foreground">)</span>
+              </pre>
+            )}
+
+            {name === "HorizontalFlip" && (
+              <pre className="rounded-lg bg-muted px-5 py-4 text-sm font-mono text-foreground leading-relaxed overflow-x-auto">
+                <span className="text-muted-foreground">transforms.functional.</span>
+                <span>hflip</span>
+                <span className="text-muted-foreground">(</span>
+                <span className="text-muted-foreground">img</span>
                 <span className="text-muted-foreground">)</span>
               </pre>
             )}
