@@ -19,8 +19,8 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import {
-  RESNET18_SPEC,
-  TOTAL_PARAMS,
+  buildResNet18Spec,
+  validateInputSize,
   accentFor,
   formatParams,
   formatShape,
@@ -261,8 +261,11 @@ const edgeTypes = {
 // Build the React Flow graph from the spec
 // ---------------------------------------------------------------------------
 
-function buildGraph(selectedId: string | null): { nodes: AnyRFNode[]; edges: Edge[] } {
-  const nodes: AnyRFNode[] = RESNET18_SPEC.map((spec) => {
+function buildGraph(
+  specList: readonly DiagramNode[],
+  selectedId: string | null,
+): { nodes: AnyRFNode[]; edges: Edge[] } {
+  const nodes: AnyRFNode[] = specList.map((spec) => {
     const layout = LAYOUT[spec.id];
     const x = COL_X[layout.col];
     const y = layout.row * Y_STEP;
@@ -286,9 +289,9 @@ function buildGraph(selectedId: string | null): { nodes: AnyRFNode[]; edges: Edg
   const edges: Edge[] = [];
 
   // Main forward flow between consecutive nodes.
-  for (let i = 0; i < RESNET18_SPEC.length - 1; i++) {
-    const a = RESNET18_SPEC[i];
-    const b = RESNET18_SPEC[i + 1];
+  for (let i = 0; i < specList.length - 1; i++) {
+    const a = specList[i];
+    const b = specList[i + 1];
     const aLayout = LAYOUT[a.id];
     const bLayout = LAYOUT[b.id];
     const sameCol = aLayout.col === bLayout.col;
@@ -304,7 +307,7 @@ function buildGraph(selectedId: string | null): { nodes: AnyRFNode[]; edges: Edg
   }
 
   // Residual skip self-loops on every BasicBlock.
-  for (const spec of RESNET18_SPEC) {
+  for (const spec of specList) {
     if (spec.kind !== "basicblock") continue;
     const bb = spec as BasicBlockSpec;
     edges.push({
@@ -465,7 +468,7 @@ function InfoCard({
             <ul className="mt-2 space-y-1.5">
               {sublayers.map((sl) => (
                 <li key={sl.name} className="font-mono text-[11.5px] leading-relaxed">
-                  <div className="break-all text-foreground/85">{sl.py}</div>
+                  <div className="whitespace-pre-wrap text-foreground/85">{sl.py}</div>
                   {sl.note ? (
                     <div className="mt-0.5 text-[10.5px] text-foreground/50 italic">
                       {sl.note}
@@ -493,13 +496,15 @@ function InfoCard({
 // ---------------------------------------------------------------------------
 
 interface FlowCanvasProps {
+  specList: readonly DiagramNode[];
+  totalParams: number;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onHoverChange: (id: string | null) => void;
 }
 
-function FlowCanvas({ selectedId, onSelect, onHoverChange }: FlowCanvasProps) {
-  const { nodes, edges } = useMemo(() => buildGraph(selectedId), [selectedId]);
+function FlowCanvas({ specList, totalParams, selectedId, onSelect, onHoverChange }: FlowCanvasProps) {
+  const { nodes, edges } = useMemo(() => buildGraph(specList, selectedId), [specList, selectedId]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -559,7 +564,7 @@ function FlowCanvas({ selectedId, onSelect, onHoverChange }: FlowCanvasProps) {
             torchvision.models.resnet18()
           </div>
           <div className="font-mono text-foreground/55">
-            {TOTAL_PARAMS.toLocaleString()} params · {formatParams(TOTAL_PARAMS)}
+            {totalParams.toLocaleString()} params · {formatParams(totalParams)}
           </div>
         </div>
       </Panel>
@@ -567,25 +572,127 @@ function FlowCanvas({ selectedId, onSelect, onHoverChange }: FlowCanvasProps) {
   );
 }
 
+const DEFAULT_H = 224;
+const DEFAULT_W = 224;
+
 export function ResNet18Diagram() {
+  // Applied dimensions — what the diagram currently shows.
+  const [appliedH, setAppliedH] = useState(DEFAULT_H);
+  const [appliedW, setAppliedW] = useState(DEFAULT_W);
+
+  // Draft dimensions — what the user is typing before hitting Apply.
+  const [draftH, setDraftH] = useState(String(DEFAULT_H));
+  const [draftW, setDraftW] = useState(String(DEFAULT_W));
+
+  const [error, setError] = useState<string | null>(null);
+
   const [selectedId, setSelectedId] = useState<string | null>("bb-2-0");
   const [hoverId, setHoverId] = useState<string | null>(null);
 
-  const activeId = hoverId ?? selectedId;
-  const activeSpec = useMemo(
-    () => RESNET18_SPEC.find((n) => n.id === activeId) ?? null,
-    [activeId],
+  const { spec: specList, totalParams } = useMemo(
+    () => buildResNet18Spec(appliedH, appliedW),
+    [appliedH, appliedW],
   );
 
-  // The tutorial container is max-w-4xl (~848px inner). A side-by-side layout
-  // with a 320px info card would leave the diagram cramped, so on lg+ screens
-  // we break out of the container with negative margins to claim more width.
+  const activeId = hoverId ?? selectedId;
+  const activeSpec = useMemo(
+    () => specList.find((n) => n.id === activeId) ?? null,
+    [specList, activeId],
+  );
+
+  const handleApply = () => {
+    const h = parseInt(draftH, 10);
+    const w = parseInt(draftW, 10);
+
+    if (Number.isNaN(h) || Number.isNaN(w)) {
+      setError("Height and width must be numbers.");
+      return;
+    }
+
+    const msg = validateInputSize(h, w);
+    if (msg) {
+      setError(msg);
+      return;
+    }
+
+    setError(null);
+    setAppliedH(h);
+    setAppliedW(w);
+  };
+
+  const handleReset = () => {
+    setDraftH(String(DEFAULT_H));
+    setDraftW(String(DEFAULT_W));
+    setError(null);
+    setAppliedH(DEFAULT_H);
+    setAppliedW(DEFAULT_W);
+  };
+
+  const draftsMatchApplied =
+    parseInt(draftH, 10) === appliedH && parseInt(draftW, 10) === appliedW;
+
   return (
     <figure className="my-8 lg:-mx-20 xl:-mx-32">
+      {/* Input size controls */}
+      <div className="mb-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-[12px] font-semibold tracking-wide text-foreground/55 uppercase">
+            Input size
+          </span>
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="resnet-h" className="text-[12px] text-foreground/50">H</label>
+            <input
+              id="resnet-h"
+              type="number"
+              value={draftH}
+              onChange={(e) => { setDraftH(e.target.value); setError(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleApply(); }}
+              className="w-[72px] rounded-md border border-border/60 bg-background px-2 py-1 font-mono text-[13px] text-foreground focus:border-accent focus:outline-none"
+            />
+          </div>
+          <span className="text-foreground/30">&times;</span>
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="resnet-w" className="text-[12px] text-foreground/50">W</label>
+            <input
+              id="resnet-w"
+              type="number"
+              value={draftW}
+              onChange={(e) => { setDraftW(e.target.value); setError(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleApply(); }}
+              className="w-[72px] rounded-md border border-border/60 bg-background px-2 py-1 font-mono text-[13px] text-foreground focus:border-accent focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={draftsMatchApplied && !error}
+            className="rounded-md bg-accent px-3 py-1 text-[12px] font-medium text-white transition hover:bg-accent/80 disabled:opacity-40 disabled:cursor-default"
+          >
+            Apply
+          </button>
+          {(appliedH !== DEFAULT_H || appliedW !== DEFAULT_W) && (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="rounded-md px-2 py-0.5 text-[11px] text-foreground/50 transition hover:bg-muted hover:text-foreground"
+            >
+              reset to 224
+            </button>
+          )}
+        </div>
+        {error && (
+          <p className="mt-2 text-[12px] leading-relaxed text-red-400" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="h-[620px] overflow-hidden rounded-xl border border-border/60 bg-muted/20">
           <ReactFlowProvider>
             <FlowCanvas
+              specList={specList}
+              totalParams={totalParams}
               selectedId={selectedId}
               onSelect={setSelectedId}
               onHoverChange={setHoverId}
