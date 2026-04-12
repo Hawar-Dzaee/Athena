@@ -83,6 +83,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 8,
   },
+  {
+    slug: "resnet18-feature-maps",
+    topic: "deep-learning",
+    title: "ResNet-18: Feature Map Flow",
+    blurb:
+      "Watch feature maps transform as an image flows through every layer of ResNet-18 — from raw pixels to class predictions.",
+    status: "ready",
+    minutes: 5,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {
