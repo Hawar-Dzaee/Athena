@@ -6,7 +6,7 @@
  * which keeps the landing page in sync without scanning the filesystem.
  */
 
-export type Topic = "linear-algebra" | "statistics" | "probability" | "deep-learning" | "pytorch";
+export type Topic = "linear-algebra" | "statistics" | "probability" | "deep-learning" | "pytorch" | "regularization";
 
 export type TutorialStatus = "ready" | "wip" | "planned";
 
@@ -46,6 +46,11 @@ export const TOPICS: Record<Topic, { label: string; description: string; accent:
     description: "Interactive PyTorch playground — run real code in the browser.",
     accent: "from-red-500 to-orange-500",
   },
+  regularization: {
+    label: "Regularization",
+    description: "Techniques that prevent collapse, overfitting, and degenerate solutions.",
+    accent: "from-cyan-500 to-blue-500",
+  },
 };
 
 export const TUTORIALS: Tutorial[] = [
@@ -84,15 +89,6 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 8,
   },
   {
-    slug: "resnet18-feature-maps",
-    topic: "deep-learning",
-    title: "ResNet-18: Feature Map Flow",
-    blurb:
-      "Watch feature maps transform as an image flows through every layer of ResNet-18 — from raw pixels to class predictions.",
-    status: "ready",
-    minutes: 5,
-  },
-  {
     slug: "adaptive-avg-pool2d",
     topic: "pytorch",
     title: "AdaptiveAvgPool2d",
@@ -100,6 +96,15 @@ export const TUTORIALS: Tutorial[] = [
       "See how nn.AdaptiveAvgPool2d partitions an input grid into regions and averages each one to produce a fixed-size output.",
     status: "ready",
     minutes: 4,
+  },
+  {
+    slug: "vicreg",
+    topic: "regularization",
+    title: "VICReg: Variance–Invariance–Covariance",
+    blurb:
+      "Toggle each loss term on and off to see how variance, invariance, and covariance regularization prevent representation collapse.",
+    status: "ready",
+    minutes: 10,
   },
 ];
 
