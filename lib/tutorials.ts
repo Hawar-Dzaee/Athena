@@ -92,6 +92,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 5,
   },
+  {
+    slug: "adaptive-avg-pool2d",
+    topic: "pytorch",
+    title: "AdaptiveAvgPool2d",
+    blurb:
+      "See how nn.AdaptiveAvgPool2d partitions an input grid into regions and averages each one to produce a fixed-size output.",
+    status: "ready",
+    minutes: 4,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {
