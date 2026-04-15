@@ -6,7 +6,7 @@
  * which keeps the landing page in sync without scanning the filesystem.
  */
 
-export type Topic = "linear-algebra" | "statistics" | "probability" | "deep-learning" | "pytorch" | "regularization";
+export type Topic = "linear-algebra" | "statistics" | "probability" | "deep-learning" | "pytorch" | "regularization" | "optimizer";
 
 export type TutorialStatus = "ready" | "wip" | "planned";
 
@@ -50,6 +50,11 @@ export const TOPICS: Record<Topic, { label: string; description: string; accent:
     label: "Regularization",
     description: "Techniques that prevent collapse, overfitting, and degenerate solutions.",
     accent: "from-cyan-500 to-blue-500",
+  },
+  optimizer: {
+    label: "Optimizer",
+    description: "Learning rate strategies and parameter update rules for training neural networks.",
+    accent: "from-fuchsia-500 to-purple-500",
   },
 };
 
@@ -105,6 +110,15 @@ export const TUTORIALS: Tutorial[] = [
       "Toggle each loss term on and off to see how variance, invariance, and covariance regularization prevent representation collapse.",
     status: "ready",
     minutes: 10,
+  },
+  {
+    slug: "lars",
+    topic: "optimizer",
+    title: "LARS: Layer-wise Adaptive Rate Scaling",
+    blurb:
+      "See how LARS computes a per-layer learning rate from weight and gradient norms — and why that unlocks large-batch training.",
+    status: "ready",
+    minutes: 8,
   },
 ];
 

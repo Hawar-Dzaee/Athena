@@ -1,0 +1,91 @@
+import { LARSExplorer } from "./components/LARSExplorer";
+
+# LARS: Layer-wise Adaptive Rate Scaling
+
+Training with large batches should be simple — more samples per step means
+less noise and faster wall-clock convergence. In practice, naively scaling the
+batch size past a few thousand causes accuracy to collapse. The learning rate
+that works for one layer is wrong for another.
+
+[LARS](https://arxiv.org/abs/1708.03888) (You, Gitenthal & Darrell, 2017)
+diagnoses the problem as a **norm mismatch**: different layers have wildly
+different ratios of weight magnitude to gradient magnitude. A single global
+learning rate can't account for that.
+
+## The problem with a flat learning rate
+
+In standard SGD the update rule is the same everywhere:
+
+$$
+w^l \leftarrow w^l - \eta \, \nabla L(w^l)
+$$
+
+Consider two layers:
+
+- **Early conv layer**: large weights ($\|w\| = 12$), tiny gradients
+  ($\|\nabla L\| = 0.02$). The update $\eta \cdot 0.02$ barely nudges the
+  weights — training stalls.
+- **Final FC layer**: small weights ($\|w\| = 1.4$), large gradients
+  ($\|\nabla L\| = 3.1$). The update $\eta \cdot 3.1$ overshoots — training
+  destabilizes.
+
+Cranking $\eta$ up helps the first layer but blows up the second.
+Cranking it down stabilizes the second but starves the first.
+
+## The LARS rule
+
+LARS replaces the single $\eta$ with a **per-layer local rate** $\lambda^l$:
+
+$$
+\lambda^l = \eta \;\cdot\; \varphi \;\cdot\;
+\frac{\|w^l\|}{\|\nabla L(w^l)\| + \beta\,\|w^l\|}
+$$
+
+where:
+
+- $\eta$ is the global (base) learning rate
+- $\varphi$ is the **trust coefficient** — a small scalar (typically 0.001–0.02)
+  that controls how aggressively the ratio is applied
+- $\|w^l\|$ is the L2 norm of the weights in layer $l$
+- $\|\nabla L(w^l)\|$ is the L2 norm of the gradients in layer $l$
+- $\beta$ is weight decay
+
+The update becomes:
+
+$$
+w^l \leftarrow w^l - \lambda^l \, \nabla L(w^l)
+$$
+
+The ratio $\|w\| / \|\nabla L\|$ is the key insight: it normalizes the step
+size relative to the layer's own scale. Layers where gradients are small
+compared to weights get amplified; layers where gradients dominate get damped.
+
+## Explore it
+
+Toggle between SGD and LARS below. Drag the sliders to change the global
+learning rate and trust coefficient. Watch how the per-layer effective learning
+rates change — and compare the flat SGD bar to the adaptive LARS bars.
+
+<LARSExplorer />
+
+## Why this unlocks large-batch training
+
+Large batches reduce gradient noise, but they also amplify the norm mismatch
+between layers. With SGD, there's no learning rate that works for all layers
+simultaneously at batch sizes of 8K, 16K, or 32K.
+
+LARS decouples the layers: each one gets a step size proportional to its own
+weight/gradient ratio. The paper trains ResNet-50 on ImageNet with **batch
+size 32K** in under an hour — matching the accuracy of small-batch training.
+
+## Key takeaways
+
+- **One learning rate doesn't fit all layers.** Weight and gradient norms vary
+  by orders of magnitude across a network.
+- **LARS scales each layer's LR by $\|w\| / \|\nabla L\|$.** This makes the
+  update proportional to the layer's own scale, not a global constant.
+- **The trust coefficient $\varphi$ is the safety valve.** It keeps the
+  per-layer scaling conservative enough to remain stable.
+- **Large-batch training is the payoff.** LARS (and its successor LAMB for
+  Adam-style optimizers) made it practical to train at batch sizes of 32K+
+  without accuracy degradation.

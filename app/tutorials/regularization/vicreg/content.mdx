@@ -1,0 +1,76 @@
+import { VICRegExplorer } from "./components/VICRegExplorer";
+
+# VICReg: Variance–Invariance–Covariance Regularization
+
+Self-supervised learning wants an encoder that maps different *views* of the
+same image (crops, flips, color jitter) to similar representations — without
+ever seeing labels. The catch: the encoder can cheat. It can map **everything**
+to the same constant vector and the "similarity" objective is perfectly
+satisfied. This is **representation collapse**.
+
+[VICReg](https://arxiv.org/abs/2105.04906) (Bardes, Ponce & LeCun, 2022)
+fixes this with three explicit regularization terms on the embedding batch,
+each targeting a different failure mode.
+
+## The three terms
+
+### Invariance (the learning signal)
+
+$$
+s(Z, Z') = \frac{1}{n} \sum_{i=1}^{n} \| z_i - z'_i \|^2
+$$
+
+This is the only term that cares about *pairs*. It says: two augmented views
+of the same image should produce nearby embeddings. Without this, the encoder
+has no reason to preserve identity.
+
+### Variance (prevent point collapse)
+
+$$
+v(Z) = \frac{1}{d} \sum_{j=1}^{d} \max\!\bigl(0,\; \gamma - \sqrt{\operatorname{Var}(z^j) + \epsilon}\bigr)
+$$
+
+For each embedding dimension $j$, the standard deviation across the batch must
+stay above a threshold $\gamma$ (typically 1). This is a *hinge loss* — it
+doesn't push variance higher than needed, just prevents it from dying.
+
+### Covariance (prevent dimensional collapse)
+
+$$
+c(Z) = \frac{1}{d} \sum_{i \neq j} \bigl[C(Z)\bigr]_{ij}^2
+$$
+
+where $C(Z)$ is the covariance matrix of the embeddings. This penalizes
+off-diagonal entries, decorrelating dimensions so each axis captures
+**different** information. Without it, the encoder can satisfy variance
+by spreading along a single direction.
+
+## The combined loss
+
+$$
+\ell(Z, Z') = \lambda\, s(Z, Z') \;+\; \mu\,\bigl[v(Z) + v(Z')\bigr] \;+\; \nu\,\bigl[c(Z) + c(Z')\bigr]
+$$
+
+The paper uses $\lambda = 25$, $\mu = 25$, $\nu = 1$. Each term fights a
+different collapse mode; together they balance into stable, informative
+representations.
+
+## Explore it
+
+Toggle each term below. Watch how the embedding space changes — and read the
+insight panel to understand *why*. The circles and diamonds are the two views
+of the same sample (same color = same image). Dashed lines connect each pair.
+
+<VICRegExplorer />
+
+## Key takeaways
+
+- **Invariance alone collapses.** It's necessary but not sufficient — without
+  the other terms, the trivial solution wins.
+- **Variance is a safety net.** It doesn't create good representations; it
+  just forbids degenerate ones.
+- **Covariance is the diversity term.** It ensures the embedding dimensions
+  aren't redundant copies of each other.
+- **No negatives, no momentum encoder.** Unlike contrastive methods (SimCLR)
+  or asymmetric architectures (BYOL), VICReg operates purely on batch
+  statistics. This makes it simpler and more stable.
