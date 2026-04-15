@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SidebarToggleButton } from "./SidebarToggle";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function SiteHeader() {
   return (
@@ -13,6 +14,9 @@ export function SiteHeader() {
           />
           Athena
         </Link>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );
