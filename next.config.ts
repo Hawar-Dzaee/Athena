@@ -33,6 +33,14 @@ const withMDX = createMDX({
  */
 const nextConfig: NextConfig = {
   pageExtensions: ["ts", "tsx", "md", "mdx"],
+  async rewrites() {
+    return [
+      {
+        source: "/api/train",
+        destination: "http://localhost:8000/train",
+      },
+    ];
+  },
 };
 
 export default withMDX(nextConfig);
