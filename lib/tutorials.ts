@@ -112,6 +112,14 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 10,
   },
   {
+    slug: "playground",
+    topic: "deep-learning",
+    title: "Neural Network Playground",
+    blurb:
+      "A minimal multi-layer perceptron — input, hidden, and output neurons wired together.",
+    status: "ready",
+  },
+  {
     slug: "lars",
     topic: "optimizer",
     title: "LARS: Layer-wise Adaptive Rate Scaling",
