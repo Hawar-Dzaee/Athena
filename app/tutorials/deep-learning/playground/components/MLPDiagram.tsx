@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { codeToHtml } from "shiki";
 
 const MIN_NEURONS = 1;
 const MAX_NEURONS = 8;
@@ -233,6 +234,182 @@ function LossChart({
   );
 }
 
+function generatePytorchCode(params: {
+  dataset: DatasetValue;
+  inputCount: number;
+  hiddenCount: number;
+  outputCount: number;
+  learningRate: number;
+  activation: Activation;
+  lossFn: LossFn;
+  optimizer: Optimizer;
+  batchSize: number;
+  epochs: number;
+  sampleSize: number;
+}): string {
+  const {
+    dataset,
+    inputCount,
+    hiddenCount,
+    outputCount,
+    learningRate,
+    activation,
+    batchSize,
+    epochs,
+    sampleSize,
+  } = params;
+
+  const activationMap: Record<Activation, string> = {
+    ReLU: "nn.ReLU()",
+    Tanh: "nn.Tanh()",
+    Sigmoid: "nn.Sigmoid()",
+    Linear: "nn.Identity()",
+  };
+  const act = activationMap[activation];
+
+  const datasetBlocks: Record<DatasetValue, string> = {
+    randn: `X = torch.randn(N, input_dim)
+Y = torch.randn(N, output_dim)`,
+    circle: `t = torch.linspace(0, 2 * torch.pi, N)
+X = torch.stack([torch.cos(t), torch.sin(t)], dim=1)${inputCount > 2 ? `\nX = torch.cat([X, torch.randn(N, input_dim - 2)], dim=1)` : ""}
+Y = (X[:, 0:1] ** 2 + X[:, 1:2] ** 2).expand(-1, output_dim)`,
+    xor: `X = torch.randint(0, 2, (N, input_dim)).float()
+Y = (X[:, 0:1] * X[:, 1:2]${inputCount < 2 ? "" : ""}).expand(-1, output_dim).float()`,
+    gaussian: `X = torch.randn(N, input_dim)
+Y = torch.exp(-X[:, 0:1] ** 2).expand(-1, output_dim)`,
+    spiral: `t = torch.linspace(0, 4 * torch.pi, N)
+r = t / (4 * torch.pi)
+X = torch.stack([r * torch.cos(t), r * torch.sin(t)], dim=1)${inputCount > 2 ? `\nX = torch.cat([X, torch.randn(N, input_dim - 2)], dim=1)` : ""}
+X = X + torch.randn_like(X) * 0.05
+Y = (t / (4 * torch.pi)).unsqueeze(1).expand(-1, output_dim)`,
+  };
+
+  return `import torch
+import torch.nn as nn
+
+# ── Hyperparameters ──────────────────────────────────────
+input_dim   = ${inputCount}
+hidden_dim  = ${hiddenCount}
+output_dim  = ${outputCount}
+lr          = ${learningRate}
+epochs      = ${epochs}
+batch_size  = ${batchSize}
+N           = ${sampleSize}
+
+torch.manual_seed(42)
+
+# ── Dataset: ${dataset} ──────────────────────────────────
+${datasetBlocks[dataset]}
+
+# ── Model ────────────────────────────────────────────────
+model = nn.Sequential(
+    nn.Linear(input_dim, hidden_dim),
+    ${act},
+    nn.Linear(hidden_dim, output_dim),
+)
+
+criterion = nn.MSELoss()
+optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+
+# ── Training loop ────────────────────────────────────────
+loss_curve = []
+
+for epoch in range(epochs):
+    perm = torch.randperm(N)
+    X_shuf = X[perm]
+    Y_shuf = Y[perm]
+    epoch_loss = 0.0
+    n_batches = 0
+
+    for i in range(0, N, batch_size):
+        xb = X_shuf[i : i + batch_size]
+        yb = Y_shuf[i : i + batch_size]
+        pred = model(xb)
+        loss = criterion(pred, yb)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        epoch_loss += loss.item()
+        n_batches += 1
+
+    avg_loss = epoch_loss / max(n_batches, 1)
+    loss_curve.append(avg_loss)
+
+    if (epoch + 1) % ${Math.max(1, Math.round(epochs / 10))} == 0:
+        print(f"Epoch {epoch + 1:>4d}/{epochs}  Loss: {avg_loss:.6f}")
+
+print(f"\\nFinal loss: {loss_curve[-1]:.6f}")`;
+}
+
+function HighlightedCode({ code }: { code: string }) {
+  const [html, setHtml] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    codeToHtml(code, {
+      lang: "python",
+      themes: { light: "github-light", dark: "github-dark" },
+      defaultColor: false,
+    }).then((result) => {
+      if (!cancelled) setHtml(result);
+    });
+    return () => { cancelled = true; };
+  }, [code]);
+
+  if (!html) {
+    // Fallback while Shiki loads
+    return (
+      <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed text-foreground/90">
+        <code>{code}</code>
+      </pre>
+    );
+  }
+
+  return (
+    <div
+      className="overflow-x-auto [&_pre]:p-4 [&_pre]:text-[13px] [&_pre]:leading-relaxed [&_pre]:bg-transparent!"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label="Copy code to clipboard"
+      className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-foreground/70 transition hover:bg-accent/10 hover:text-foreground"
+    >
+      {copied ? (
+        <>
+          <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Copied
+        </>
+      ) : (
+        <>
+          <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <rect x={9} y={9} width={13} height={13} rx={2} ry={2} />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy
+        </>
+      )}
+    </button>
+  );
+}
+
 export function MLPDiagram() {
   const [inputCount, setInputCount] = useState(4);
   const [hiddenCount, setHiddenCount] = useState(6);
@@ -250,6 +427,7 @@ export function MLPDiagram() {
   const [displayLoss, setDisplayLoss] = useState<number | null>(null);
   const [training, setTraining] = useState(false);
   const [trainError, setTrainError] = useState<string | null>(null);
+  const [showCode, setShowCode] = useState(false);
   const animRef = useRef<number>(0);
   const displayLossRef = useRef<number | null>(null);
 
@@ -662,6 +840,91 @@ export function MLPDiagram() {
         lossPolyline={lossPolyline}
       />
     </div>
+    {/* PyTorch code sidebar */}
+    {(() => {
+      const code = generatePytorchCode({
+        dataset,
+        inputCount,
+        hiddenCount,
+        outputCount,
+        learningRate,
+        activation,
+        lossFn,
+        optimizer,
+        batchSize,
+        epochs,
+        sampleSize,
+      });
+      return (
+        <>
+          {/* Edge tab — fixed to right edge, always visible, vertically centered */}
+          <button
+            type="button"
+            onClick={() => setShowCode((v) => !v)}
+            aria-expanded={showCode}
+            aria-controls="pytorch-code-sidebar"
+            aria-label={showCode ? "Close PyTorch code" : "Show PyTorch code"}
+            className={`fixed top-1/2 z-50 flex h-28 w-10 -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-lg border border-r-0 border-border bg-background text-foreground/70 shadow-lg transition-all duration-300 ease-in-out hover:bg-accent/10 hover:text-foreground ${
+              showCode ? "right-[32rem]" : "right-0"
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width={18}
+              height={18}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
+            </svg>
+          </button>
+
+{/* Sidebar panel */}
+          <aside
+            id="pytorch-code-sidebar"
+            className={`fixed top-0 right-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-border bg-background shadow-2xl transition-transform duration-300 ease-in-out ${
+              showCode ? "translate-x-0" : "translate-x-full"
+            }`}
+            aria-label="PyTorch code sidebar"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-foreground">
+                  PyTorch Code
+                </span>
+                <span className="text-xs text-foreground/50">
+                  Paste into a Jupyter notebook to reproduce
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CopyButton text={code} />
+                <button
+                  type="button"
+                  onClick={() => setShowCode(false)}
+                  aria-label="Close sidebar"
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-foreground/60 transition hover:bg-accent/10 hover:text-foreground"
+                >
+                  <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <line x1={18} y1={6} x2={6} y2={18} />
+                    <line x1={6} y1={6} x2={18} y2={18} />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Code body */}
+            <div className="flex-1 overflow-y-auto">
+              <HighlightedCode code={code} />
+            </div>
+          </aside>
+        </>
+      );
+    })()}
     </>
   );
 }
