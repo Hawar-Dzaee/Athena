@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 const MIN_NEURONS = 1;
 const MAX_NEURONS = 8;
@@ -89,6 +89,150 @@ type Activation = (typeof ACTIVATIONS)[number];
 type LossFn = (typeof LOSS_FNS)[number];
 type Optimizer = (typeof OPTIMIZERS)[number];
 
+function niceTickCount(range: number): number[] {
+  // Return 3–5 evenly-spaced tick values for a given [min,max]
+  const steps = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+  const target = range / 4;
+  const step = steps.find((s) => s >= target) ?? steps[steps.length - 1];
+  const ticks: number[] = [];
+  const start = 0;
+  for (let v = start; v <= range * 1.01; v += step) {
+    ticks.push(v);
+    if (ticks.length >= 6) break;
+  }
+  return ticks;
+}
+
+function LossChart({
+  fullCurve,
+  visibleCurve,
+  lossPolyline,
+}: {
+  fullCurve: number[];
+  visibleCurve: number[];
+  lossPolyline: string;
+}) {
+  const LEFT = 28;
+  const RIGHT = 290;
+  const TOP = 8;
+  const BOTTOM = 158;
+  const PW = RIGHT - LEFT;
+  const PH = BOTTOM - TOP;
+
+  const hasData = fullCurve.length >= 2;
+  const maxLoss = hasData ? Math.max(...fullCurve) : 1;
+  const minLoss = hasData ? Math.min(...fullCurve) : 0;
+  const lossRange = Math.max(maxLoss - minLoss, 1e-9);
+  const totalEpochs = fullCurve.length;
+
+  // Y-axis ticks (loss values)
+  const yRaw = niceTickCount(lossRange);
+  const yTicks = yRaw.map((offset) => ({
+    value: minLoss + offset,
+    y: TOP + (1 - offset / lossRange) * PH,
+  }));
+
+  // X-axis ticks (epoch numbers)
+  const xStep = totalEpochs <= 10 ? 1 : totalEpochs <= 50 ? 10 : totalEpochs <= 200 ? 25 : 50;
+  const xTicks: { epoch: number; x: number }[] = [];
+  if (totalEpochs > 0) {
+    for (let e = 0; e <= totalEpochs; e += xStep) {
+      xTicks.push({ epoch: e, x: LEFT + (e / (totalEpochs - 1)) * PW });
+    }
+    // always include the last epoch
+    const last = totalEpochs - 1;
+    if (!xTicks.some((t) => t.epoch === last)) {
+      xTicks.push({ epoch: last + 1, x: RIGHT });
+    }
+  }
+
+  const labelSize = 7;
+  const tickSize = 6;
+
+  return (
+    <svg viewBox="0 0 300 180" className="w-full" role="img" aria-label="Training loss curve">
+      {/* Grid lines */}
+      <g stroke="currentColor" className="text-border" strokeWidth={0.3} opacity={0.5}>
+        {yTicks.map((t, i) => (
+          <line key={`yg-${i}`} x1={LEFT} x2={RIGHT} y1={t.y} y2={t.y} />
+        ))}
+        {xTicks.map((t, i) => (
+          <line key={`xg-${i}`} x1={t.x} x2={t.x} y1={TOP} y2={BOTTOM} />
+        ))}
+      </g>
+
+      {/* Axes */}
+      <g stroke="currentColor" className="text-foreground/50" strokeWidth={0.4} fill="none">
+        <line x1={LEFT} x2={RIGHT} y1={BOTTOM} y2={BOTTOM} />
+        <line x1={LEFT} x2={LEFT} y1={TOP} y2={BOTTOM} />
+      </g>
+
+      {/* Y-axis tick labels */}
+      <g className="fill-foreground/50" fontSize={tickSize} textAnchor="end" dominantBaseline="middle">
+        {yTicks.map((t, i) => (
+          <text key={`yl-${i}`} x={LEFT - 4} y={t.y}>
+            {t.value < 0.01 ? t.value.toExponential(0) : t.value < 1 ? t.value.toFixed(2) : t.value.toFixed(1)}
+          </text>
+        ))}
+      </g>
+
+      {/* X-axis tick labels */}
+      <g className="fill-foreground/50" fontSize={tickSize} textAnchor="middle" dominantBaseline="hanging">
+        {xTicks.map((t, i) => (
+          <text key={`xl-${i}`} x={t.x} y={BOTTOM + 4}>
+            {t.epoch}
+          </text>
+        ))}
+      </g>
+
+      {/* Axis labels */}
+      <text
+        x={(LEFT + RIGHT) / 2}
+        y={BOTTOM + 17}
+        className="fill-foreground/60"
+        fontSize={labelSize}
+        textAnchor="middle"
+      >
+        Epoch
+      </text>
+      <text
+        x={5}
+        y={(TOP + BOTTOM) / 2}
+        className="fill-foreground/60"
+        fontSize={labelSize}
+        textAnchor="middle"
+        transform={`rotate(-90, 5, ${(TOP + BOTTOM) / 2})`}
+      >
+        Loss
+      </text>
+
+      {/* Loss curve */}
+      {lossPolyline && (
+        <polyline
+          points={lossPolyline}
+          fill="none"
+          stroke="currentColor"
+          className="text-accent"
+          strokeWidth={1.5}
+        />
+      )}
+
+      {/* Current point dot */}
+      {visibleCurve.length >= 1 && lossPolyline && (() => {
+        const lastPt = lossPolyline.split(" ").pop()!.split(",");
+        return (
+          <circle
+            cx={Number(lastPt[0])}
+            cy={Number(lastPt[1])}
+            r={2.5}
+            className="fill-accent"
+          />
+        );
+      })()}
+    </svg>
+  );
+}
+
 export function MLPDiagram() {
   const [inputCount, setInputCount] = useState(4);
   const [hiddenCount, setHiddenCount] = useState(6);
@@ -101,13 +245,73 @@ export function MLPDiagram() {
   const [epochs, setEpochs] = useState(100);
   const [sampleSize, setSampleSize] = useState(512);
   const [batchSize, setBatchSize] = useState(32);
-  const [lossCurve, setLossCurve] = useState<number[]>([]);
+  const [fullCurve, setFullCurve] = useState<number[]>([]);
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [displayLoss, setDisplayLoss] = useState<number | null>(null);
   const [training, setTraining] = useState(false);
   const [trainError, setTrainError] = useState<string | null>(null);
+  const animRef = useRef<number>(0);
+  const displayLossRef = useRef<number | null>(null);
+
+  const stopAnimation = useCallback(() => {
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = 0;
+    }
+  }, []);
+
+  const animateCurve = useCallback((curve: number[]) => {
+    stopAnimation();
+    if (curve.length === 0) return;
+
+    const totalDuration = Math.min(2000, curve.length * 30);
+    const start = performance.now();
+    displayLossRef.current = null;
+
+    function tick(now: number) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / totalDuration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const count = Math.max(1, Math.round(eased * curve.length));
+      setVisibleCount(count);
+
+      // animate the displayed numeric loss
+      const currentLoss = curve[count - 1];
+      const prevLoss = displayLossRef.current;
+      if (prevLoss === null) {
+        displayLossRef.current = currentLoss;
+        setDisplayLoss(currentLoss);
+      } else {
+        // smooth interpolation toward actual value
+        const lerped = prevLoss + (currentLoss - prevLoss) * 0.3;
+        displayLossRef.current = lerped;
+        setDisplayLoss(lerped);
+      }
+
+      if (progress < 1) {
+        animRef.current = requestAnimationFrame(tick);
+      } else {
+        // snap to final values
+        setVisibleCount(curve.length);
+        setDisplayLoss(curve[curve.length - 1]);
+        displayLossRef.current = null;
+        animRef.current = 0;
+      }
+    }
+
+    animRef.current = requestAnimationFrame(tick);
+  }, [stopAnimation]);
+
+  useEffect(() => stopAnimation, [stopAnimation]);
 
   async function handleTrain() {
     setTraining(true);
     setTrainError(null);
+    stopAnimation();
+    setFullCurve([]);
+    setVisibleCount(0);
+    setDisplayLoss(null);
     try {
       const res = await fetch("/api/train", {
         method: "POST",
@@ -128,7 +332,8 @@ export function MLPDiagram() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { loss_curve: number[]; final_loss: number };
-      setLossCurve(data.loss_curve);
+      setFullCurve(data.loss_curve);
+      animateCurve(data.loss_curve);
     } catch (err) {
       setTrainError(err instanceof Error ? err.message : "Training failed");
     } finally {
@@ -137,20 +342,33 @@ export function MLPDiagram() {
   }
 
   function handleReset() {
-    setLossCurve([]);
+    stopAnimation();
+    setFullCurve([]);
+    setVisibleCount(0);
+    setDisplayLoss(null);
     setTrainError(null);
   }
 
-  const finalLoss = lossCurve.length ? lossCurve[lossCurve.length - 1] : null;
+  // Derive visible slice for rendering
+  const visibleCurve = fullCurve.slice(0, visibleCount);
+
+  // Chart plot area constants (must match LossChart)
+  const CHART_LEFT = 28;
+  const CHART_RIGHT = 290;
+  const CHART_TOP = 8;
+  const CHART_BOTTOM = 158;
+  const PLOT_W = CHART_RIGHT - CHART_LEFT;
+  const PLOT_H = CHART_BOTTOM - CHART_TOP;
+
   const lossPolyline = (() => {
-    if (lossCurve.length < 2) return "";
-    const max = Math.max(...lossCurve);
-    const min = Math.min(...lossCurve);
+    if (visibleCurve.length < 2) return "";
+    const max = Math.max(...fullCurve);
+    const min = Math.min(...fullCurve);
     const range = Math.max(max - min, 1e-9);
-    return lossCurve
+    return visibleCurve
       .map((v, i) => {
-        const x = (i / (lossCurve.length - 1)) * 100;
-        const y = 38 - ((v - min) / range) * 34;
+        const x = CHART_LEFT + (i / (fullCurve.length - 1)) * PLOT_W;
+        const y = CHART_TOP + (1 - (v - min) / range) * PLOT_H;
         return `${x.toFixed(2)},${y.toFixed(2)}`;
       })
       .join(" ");
@@ -422,21 +640,14 @@ export function MLPDiagram() {
         <span className="text-xs font-medium text-foreground/70">Output</span>
         <div className="flex flex-col gap-1 rounded-md border border-border bg-background px-3 py-2 text-sm">
           <div className="flex justify-between">
+            <span className="text-foreground/70">Epoch</span>
+            <span className="font-mono">{visibleCount > 0 ? `${visibleCount}/${fullCurve.length}` : "—"}</span>
+          </div>
+          <div className="flex justify-between">
             <span className="text-foreground/70">Training loss</span>
-            <span className="font-mono">{finalLoss !== null ? finalLoss.toFixed(3) : "—"}</span>
+            <span className="font-mono">{displayLoss !== null ? displayLoss.toFixed(3) : "—"}</span>
           </div>
         </div>
-        <svg viewBox="0 0 100 40" className="w-full" role="img" aria-label="Training loss curve">
-          {lossPolyline && (
-            <polyline
-              points={lossPolyline}
-              fill="none"
-              stroke="currentColor"
-              className="text-accent"
-              strokeWidth={1.5}
-            />
-          )}
-        </svg>
         {trainError && (
           <span className="text-xs text-red-500" role="alert">
             {trainError}
@@ -444,6 +655,13 @@ export function MLPDiagram() {
         )}
       </aside>
     </figure>
+    <div className="not-prose my-8 mx-auto w-full max-w-3xl">
+      <LossChart
+        fullCurve={fullCurve}
+        visibleCurve={visibleCurve}
+        lossPolyline={lossPolyline}
+      />
+    </div>
     </>
   );
 }
