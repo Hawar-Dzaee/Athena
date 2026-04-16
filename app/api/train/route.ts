@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     batch_size: number;
     epochs: number;
     sample_size: number;
+    train_ratio: number;
   };
 
   const code = buildTrainScript(body);
@@ -55,6 +56,7 @@ function buildTrainScript(p: {
   batch_size: number;
   epochs: number;
   sample_size: number;
+  train_ratio: number;
 }): string {
   const activationMap: Record<string, string> = {
     ReLU: "nn.ReLU()",
@@ -104,6 +106,13 @@ else:
     X = torch.randn(N, input_dim)
     Y = torch.randn(N, output_dim)
 
+# --- Train / Test split ---
+split = int(N * ${p.train_ratio})
+perm_all = torch.randperm(N)
+X_train, Y_train = X[perm_all[:split]], Y[perm_all[:split]]
+X_test,  Y_test  = X[perm_all[split:]], Y[perm_all[split:]]
+N_train = X_train.shape[0]
+
 # --- Model ---
 model = nn.Sequential(
     nn.Linear(input_dim, ${p.hidden_count}),
@@ -117,15 +126,17 @@ opt = torch.optim.SGD(model.parameters(), lr=${p.learning_rate})
 # --- Train ---
 batch_size = ${p.batch_size}
 epochs = ${p.epochs}
-loss_curve = []
+train_loss_curve = []
+test_loss_curve = []
 
 for epoch in range(epochs):
-    perm = torch.randperm(N)
-    X_shuf = X[perm]
-    Y_shuf = Y[perm]
+    model.train()
+    perm = torch.randperm(N_train)
+    X_shuf = X_train[perm]
+    Y_shuf = Y_train[perm]
     epoch_loss = 0.0
     n_batches = 0
-    for i in range(0, N, batch_size):
+    for i in range(0, N_train, batch_size):
         xb = X_shuf[i:i+batch_size]
         yb = Y_shuf[i:i+batch_size]
         pred = model(xb)
@@ -135,9 +146,21 @@ for epoch in range(epochs):
         opt.step()
         epoch_loss += loss.item()
         n_batches += 1
-    loss_curve.append(epoch_loss / max(n_batches, 1))
+    train_loss_curve.append(epoch_loss / max(n_batches, 1))
 
-print(json.dumps({"loss_curve": loss_curve, "final_loss": loss_curve[-1]}))
+    # Evaluate on test set
+    model.eval()
+    with torch.no_grad():
+        test_pred = model(X_test)
+        test_loss = criterion(test_pred, Y_test).item()
+    test_loss_curve.append(test_loss)
+
+print(json.dumps({
+    "loss_curve": train_loss_curve,
+    "test_loss_curve": test_loss_curve,
+    "final_loss": train_loss_curve[-1],
+    "final_test_loss": test_loss_curve[-1],
+}))
 `;
 }
 

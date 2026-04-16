@@ -90,14 +90,17 @@ type Activation = (typeof ACTIVATIONS)[number];
 type LossFn = (typeof LOSS_FNS)[number];
 type Optimizer = (typeof OPTIMIZERS)[number];
 
-function niceTickCount(range: number): number[] {
-  // Return 3–5 evenly-spaced tick values for a given [min,max]
+function niceYTicks(min: number, max: number): number[] {
+  const range = max - min;
+  if (range < 1e-9) return [min];
   const steps = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
   const target = range / 4;
   const step = steps.find((s) => s >= target) ?? steps[steps.length - 1];
+  // Round min down and max up to the nearest step
+  const first = Math.floor(min / step) * step;
+  const last = Math.ceil(max / step) * step;
   const ticks: number[] = [];
-  const start = 0;
-  for (let v = start; v <= range * 1.01; v += step) {
+  for (let v = first; v <= last + step * 0.01; v += step) {
     ticks.push(v);
     if (ticks.length >= 6) break;
   }
@@ -106,12 +109,14 @@ function niceTickCount(range: number): number[] {
 
 function LossChart({
   fullCurve,
+  fullTestCurve,
   visibleCurve,
-  lossPolyline,
+  visibleTestCurve,
 }: {
   fullCurve: number[];
+  fullTestCurve: number[];
   visibleCurve: number[];
-  lossPolyline: string;
+  visibleTestCurve: number[];
 }) {
   const LEFT = 28;
   const RIGHT = 290;
@@ -120,30 +125,64 @@ function LossChart({
   const PW = RIGHT - LEFT;
   const PH = BOTTOM - TOP;
 
+  const allValues = [...fullCurve, ...fullTestCurve];
   const hasData = fullCurve.length >= 2;
-  const maxLoss = hasData ? Math.max(...fullCurve) : 1;
-  const minLoss = hasData ? Math.min(...fullCurve) : 0;
-  const lossRange = Math.max(maxLoss - minLoss, 1e-9);
+  const dataMax = allValues.length > 0 ? Math.max(...allValues) : 1;
+  const dataMin = allValues.length > 0 ? Math.min(...allValues) : 0;
   const totalEpochs = fullCurve.length;
 
-  // Y-axis ticks (loss values)
-  const yRaw = niceTickCount(lossRange);
-  const yTicks = yRaw.map((offset) => ({
-    value: minLoss + offset,
-    y: TOP + (1 - offset / lossRange) * PH,
-  }));
+  // Use niceYTicks to determine the actual axis range (may be wider than data)
+  const yTickValues = niceYTicks(dataMin, dataMax);
+  const axisMin = yTickValues[0];
+  const axisMax = yTickValues[yTickValues.length - 1];
+  const axisRange = Math.max(axisMax - axisMin, 1e-9);
 
-  // X-axis ticks (epoch numbers)
-  const xStep = totalEpochs <= 10 ? 1 : totalEpochs <= 50 ? 10 : totalEpochs <= 200 ? 25 : 50;
+  // Y-axis ticks — deduplicated by formatted label, using axis range
+  const formatY = (v: number) =>
+    v < 0.01 ? v.toExponential(0) : v < 1 ? v.toFixed(2) : v.toFixed(1);
+  const seenLabels = new Set<string>();
+  const yTicks = yTickValues
+    .map((value) => ({
+      value,
+      label: formatY(value),
+      y: TOP + (1 - (value - axisMin) / axisRange) * PH,
+    }))
+    .filter((t) => {
+      if (seenLabels.has(t.label)) return false;
+      seenLabels.add(t.label);
+      return true;
+    });
+
+  // Build polylines using the same axis scale as the ticks
+  const toPolyline = (visible: number[], full: number[]) => {
+    if (visible.length < 2) return "";
+    return visible
+      .map((v, i) => {
+        const x = LEFT + (i / (full.length - 1)) * PW;
+        const y = TOP + (1 - (v - axisMin) / axisRange) * PH;
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(" ");
+  };
+  const lossPolyline = toPolyline(visibleCurve, fullCurve);
+  const testLossPolyline = toPolyline(visibleTestCurve, fullTestCurve);
+
+  // X-axis ticks — target ~5 ticks max, pick a nice step
+  const xSteps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
+  const xTarget = totalEpochs / 5;
+  const xStep = xSteps.find((s) => s >= xTarget) ?? xSteps[xSteps.length - 1];
   const xTicks: { epoch: number; x: number }[] = [];
   if (totalEpochs > 0) {
-    for (let e = 0; e <= totalEpochs; e += xStep) {
+    const lastEpoch = totalEpochs;
+    for (let e = 0; e <= lastEpoch; e += xStep) {
       xTicks.push({ epoch: e, x: LEFT + (e / (totalEpochs - 1)) * PW });
     }
-    // always include the last epoch
-    const last = totalEpochs - 1;
-    if (!xTicks.some((t) => t.epoch === last)) {
-      xTicks.push({ epoch: last + 1, x: RIGHT });
+    if (!xTicks.some((t) => t.epoch === lastEpoch)) {
+      const finalX = LEFT + (lastEpoch / (totalEpochs - 1)) * PW;
+      if (xTicks.length > 0 && finalX - xTicks[xTicks.length - 1].x < PW * 0.08) {
+        xTicks.pop();
+      }
+      xTicks.push({ epoch: lastEpoch, x: finalX });
     }
   }
 
@@ -172,7 +211,7 @@ function LossChart({
       <g className="fill-foreground/50" fontSize={tickSize} textAnchor="end" dominantBaseline="middle">
         {yTicks.map((t, i) => (
           <text key={`yl-${i}`} x={LEFT - 4} y={t.y}>
-            {t.value < 0.01 ? t.value.toExponential(0) : t.value < 1 ? t.value.toFixed(2) : t.value.toFixed(1)}
+            {t.label}
           </text>
         ))}
       </g>
@@ -207,7 +246,7 @@ function LossChart({
         Loss
       </text>
 
-      {/* Loss curve */}
+      {/* Train loss curve */}
       {lossPolyline && (
         <polyline
           points={lossPolyline}
@@ -218,7 +257,18 @@ function LossChart({
         />
       )}
 
-      {/* Current point dot */}
+      {/* Test loss curve */}
+      {testLossPolyline && (
+        <polyline
+          points={testLossPolyline}
+          fill="none"
+          stroke="#f59e0b"
+          strokeWidth={1.5}
+          strokeDasharray="4 2"
+        />
+      )}
+
+      {/* Current point dots */}
       {visibleCurve.length >= 1 && lossPolyline && (() => {
         const lastPt = lossPolyline.split(" ").pop()!.split(",");
         return (
@@ -230,6 +280,28 @@ function LossChart({
           />
         );
       })()}
+      {testLossPolyline && (() => {
+        const lastPt = testLossPolyline.split(" ").pop()!.split(",");
+        return (
+          <circle
+            cx={Number(lastPt[0])}
+            cy={Number(lastPt[1])}
+            r={2.5}
+            fill="#f59e0b"
+          />
+        );
+      })()}
+
+      {/* Legend */}
+      {hasData && (
+        <g fontSize={7} dominantBaseline="middle">
+          <rect x={RIGHT - 74} y={TOP} width={48} height={22} rx={2} className="fill-background" opacity={0.85} />
+          <line x1={RIGHT - 70} x2={RIGHT - 58} y1={TOP + 7} y2={TOP + 7} stroke="currentColor" className="text-accent" strokeWidth={1.5} />
+          <text x={RIGHT - 55} y={TOP + 7} className="fill-foreground/60">Train</text>
+          <line x1={RIGHT - 70} x2={RIGHT - 58} y1={TOP + 17} y2={TOP + 17} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 2" />
+          <text x={RIGHT - 55} y={TOP + 17} className="fill-foreground/60">Test</text>
+        </g>
+      )}
     </svg>
   );
 }
@@ -246,6 +318,7 @@ function generatePytorchCode(params: {
   batchSize: number;
   epochs: number;
   sampleSize: number;
+  testPct: number;
 }): string {
   const {
     dataset,
@@ -257,6 +330,7 @@ function generatePytorchCode(params: {
     batchSize,
     epochs,
     sampleSize,
+    testPct,
   } = params;
 
   const activationMap: Record<Activation, string> = {
@@ -301,6 +375,13 @@ torch.manual_seed(42)
 # ── Dataset: ${dataset} ──────────────────────────────────
 ${datasetBlocks[dataset]}
 
+# ── Train / Test split (${100 - testPct}/${testPct}) ─────────────────────────
+split = int(N * ${((100 - testPct) / 100).toFixed(2)})
+perm_all = torch.randperm(N)
+X_train, Y_train = X[perm_all[:split]], Y[perm_all[:split]]
+X_test,  Y_test  = X[perm_all[split:]], Y[perm_all[split:]]
+N_train = X_train.shape[0]
+
 # ── Model ────────────────────────────────────────────────
 model = nn.Sequential(
     nn.Linear(input_dim, hidden_dim),
@@ -312,16 +393,18 @@ criterion = nn.MSELoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=lr)
 
 # ── Training loop ────────────────────────────────────────
-loss_curve = []
+train_loss_curve = []
+test_loss_curve = []
 
 for epoch in range(epochs):
-    perm = torch.randperm(N)
-    X_shuf = X[perm]
-    Y_shuf = Y[perm]
+    model.train()
+    perm = torch.randperm(N_train)
+    X_shuf = X_train[perm]
+    Y_shuf = Y_train[perm]
     epoch_loss = 0.0
     n_batches = 0
 
-    for i in range(0, N, batch_size):
+    for i in range(0, N_train, batch_size):
         xb = X_shuf[i : i + batch_size]
         yb = Y_shuf[i : i + batch_size]
         pred = model(xb)
@@ -333,12 +416,20 @@ for epoch in range(epochs):
         n_batches += 1
 
     avg_loss = epoch_loss / max(n_batches, 1)
-    loss_curve.append(avg_loss)
+    train_loss_curve.append(avg_loss)
+
+    # Evaluate on test set
+    model.eval()
+    with torch.no_grad():
+        test_pred = model(X_test)
+        test_loss = criterion(test_pred, Y_test).item()
+    test_loss_curve.append(test_loss)
 
     if (epoch + 1) % ${Math.max(1, Math.round(epochs / 10))} == 0:
-        print(f"Epoch {epoch + 1:>4d}/{epochs}  Loss: {avg_loss:.6f}")
+        print(f"Epoch {epoch + 1:>4d}/{epochs}  Train: {avg_loss:.6f}  Test: {test_loss:.6f}")
 
-print(f"\\nFinal loss: {loss_curve[-1]:.6f}")`;
+print(f"\\nFinal train loss: {train_loss_curve[-1]:.6f}")
+print(f"Final test loss:  {test_loss_curve[-1]:.6f}")`;
 }
 
 function HighlightedCode({ code }: { code: string }) {
@@ -422,14 +513,18 @@ export function MLPDiagram() {
   const [epochs, setEpochs] = useState(100);
   const [sampleSize, setSampleSize] = useState(512);
   const [batchSize, setBatchSize] = useState(32);
+  const [testPct, setTestPct] = useState(20);
   const [fullCurve, setFullCurve] = useState<number[]>([]);
+  const [fullTestCurve, setFullTestCurve] = useState<number[]>([]);
   const [visibleCount, setVisibleCount] = useState(0);
   const [displayLoss, setDisplayLoss] = useState<number | null>(null);
+  const [displayTestLoss, setDisplayTestLoss] = useState<number | null>(null);
   const [training, setTraining] = useState(false);
   const [trainError, setTrainError] = useState<string | null>(null);
   const [showCode, setShowCode] = useState(false);
   const animRef = useRef<number>(0);
   const displayLossRef = useRef<number | null>(null);
+  const displayTestLossRef = useRef<number | null>(null);
 
   const stopAnimation = useCallback(() => {
     if (animRef.current) {
@@ -438,13 +533,14 @@ export function MLPDiagram() {
     }
   }, []);
 
-  const animateCurve = useCallback((curve: number[]) => {
+  const animateCurve = useCallback((curve: number[], testCurve: number[]) => {
     stopAnimation();
     if (curve.length === 0) return;
 
     const totalDuration = Math.min(2000, curve.length * 30);
     const start = performance.now();
     displayLossRef.current = null;
+    displayTestLossRef.current = null;
 
     function tick(now: number) {
       const elapsed = now - start;
@@ -454,17 +550,30 @@ export function MLPDiagram() {
       const count = Math.max(1, Math.round(eased * curve.length));
       setVisibleCount(count);
 
-      // animate the displayed numeric loss
+      // animate the displayed numeric train loss
       const currentLoss = curve[count - 1];
       const prevLoss = displayLossRef.current;
       if (prevLoss === null) {
         displayLossRef.current = currentLoss;
         setDisplayLoss(currentLoss);
       } else {
-        // smooth interpolation toward actual value
         const lerped = prevLoss + (currentLoss - prevLoss) * 0.3;
         displayLossRef.current = lerped;
         setDisplayLoss(lerped);
+      }
+
+      // animate the displayed numeric test loss
+      if (testCurve.length > 0) {
+        const currentTestLoss = testCurve[count - 1];
+        const prevTestLoss = displayTestLossRef.current;
+        if (prevTestLoss === null) {
+          displayTestLossRef.current = currentTestLoss;
+          setDisplayTestLoss(currentTestLoss);
+        } else {
+          const lerped = prevTestLoss + (currentTestLoss - prevTestLoss) * 0.3;
+          displayTestLossRef.current = lerped;
+          setDisplayTestLoss(lerped);
+        }
       }
 
       if (progress < 1) {
@@ -473,7 +582,11 @@ export function MLPDiagram() {
         // snap to final values
         setVisibleCount(curve.length);
         setDisplayLoss(curve[curve.length - 1]);
+        if (testCurve.length > 0) {
+          setDisplayTestLoss(testCurve[testCurve.length - 1]);
+        }
         displayLossRef.current = null;
+        displayTestLossRef.current = null;
         animRef.current = 0;
       }
     }
@@ -488,8 +601,10 @@ export function MLPDiagram() {
     setTrainError(null);
     stopAnimation();
     setFullCurve([]);
+    setFullTestCurve([]);
     setVisibleCount(0);
     setDisplayLoss(null);
+    setDisplayTestLoss(null);
     try {
       const res = await fetch("/api/train", {
         method: "POST",
@@ -506,12 +621,19 @@ export function MLPDiagram() {
           batch_size: batchSize,
           epochs,
           sample_size: sampleSize,
+          train_ratio: (100 - testPct) / 100,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { loss_curve: number[]; final_loss: number };
+      const data = (await res.json()) as {
+        loss_curve: number[];
+        test_loss_curve: number[];
+        final_loss: number;
+        final_test_loss: number;
+      };
       setFullCurve(data.loss_curve);
-      animateCurve(data.loss_curve);
+      setFullTestCurve(data.test_loss_curve);
+      animateCurve(data.loss_curve, data.test_loss_curve);
     } catch (err) {
       setTrainError(err instanceof Error ? err.message : "Training failed");
     } finally {
@@ -522,35 +644,16 @@ export function MLPDiagram() {
   function handleReset() {
     stopAnimation();
     setFullCurve([]);
+    setFullTestCurve([]);
     setVisibleCount(0);
     setDisplayLoss(null);
+    setDisplayTestLoss(null);
     setTrainError(null);
   }
 
-  // Derive visible slice for rendering
+  // Derive visible slices for rendering
   const visibleCurve = fullCurve.slice(0, visibleCount);
-
-  // Chart plot area constants (must match LossChart)
-  const CHART_LEFT = 28;
-  const CHART_RIGHT = 290;
-  const CHART_TOP = 8;
-  const CHART_BOTTOM = 158;
-  const PLOT_W = CHART_RIGHT - CHART_LEFT;
-  const PLOT_H = CHART_BOTTOM - CHART_TOP;
-
-  const lossPolyline = (() => {
-    if (visibleCurve.length < 2) return "";
-    const max = Math.max(...fullCurve);
-    const min = Math.min(...fullCurve);
-    const range = Math.max(max - min, 1e-9);
-    return visibleCurve
-      .map((v, i) => {
-        const x = CHART_LEFT + (i / (fullCurve.length - 1)) * PLOT_W;
-        const y = CHART_TOP + (1 - (v - min) / range) * PLOT_H;
-        return `${x.toFixed(2)},${y.toFixed(2)}`;
-      })
-      .join(" ");
-  })();
+  const visibleTestCurve = fullTestCurve.slice(0, visibleCount);
 
   const inputX = layerX(0, 3);
   const hiddenX = layerX(1, 3);
@@ -729,6 +832,20 @@ export function MLPDiagram() {
           aria-label="Batch size"
           className="accent-accent"
         />
+        <label htmlFor="ratio-select" className="mt-2 text-xs font-medium text-foreground/70">
+          Test: {testPct}%
+        </label>
+        <input
+          id="ratio-select"
+          type="range"
+          min={10}
+          max={90}
+          step={5}
+          value={testPct}
+          onChange={(e) => setTestPct(Number(e.target.value))}
+          aria-label="Test set percentage"
+          className="accent-accent"
+        />
       </aside>
       <div className="flex flex-1 flex-col items-center gap-4">
       <div className="grid w-full max-w-3xl grid-cols-3 gap-4 px-4">
@@ -822,8 +939,12 @@ export function MLPDiagram() {
             <span className="font-mono">{visibleCount > 0 ? `${visibleCount}/${fullCurve.length}` : "—"}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-foreground/70">Training loss</span>
+            <span className="text-foreground/70">Train loss</span>
             <span className="font-mono">{displayLoss !== null ? displayLoss.toFixed(3) : "—"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-foreground/70">Test loss</span>
+            <span className="font-mono">{displayTestLoss !== null ? displayTestLoss.toFixed(3) : "—"}</span>
           </div>
         </div>
         {trainError && (
@@ -836,8 +957,9 @@ export function MLPDiagram() {
     <div className="not-prose my-8 mx-auto w-full max-w-3xl">
       <LossChart
         fullCurve={fullCurve}
+        fullTestCurve={fullTestCurve}
         visibleCurve={visibleCurve}
-        lossPolyline={lossPolyline}
+        visibleTestCurve={visibleTestCurve}
       />
     </div>
     {/* PyTorch code sidebar */}
@@ -854,6 +976,7 @@ export function MLPDiagram() {
         batchSize,
         epochs,
         sampleSize,
+        testPct,
       });
       return (
         <>
