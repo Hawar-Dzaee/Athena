@@ -48,7 +48,7 @@ export default function RootLayout({
             <SidebarWrapper>
               <Sidebar topics={topics} />
             </SidebarWrapper>
-            <main className="flex-1">{children}</main>
+            <main className="min-w-0 flex-1">{children}</main>
           </div>
           <SiteFooter />
         </SidebarProvider>

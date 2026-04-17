@@ -128,6 +128,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 8,
   },
+  {
+    slug: "warmup-cosine-scheduler",
+    topic: "deep-learning",
+    title: "Warmup Cosine Scheduler",
+    blurb:
+      "Visualize how warmup + cosine annealing shapes the learning rate across training — and why the ramp matters.",
+    status: "ready",
+    minutes: 7,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {
