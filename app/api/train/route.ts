@@ -69,6 +69,7 @@ function buildTrainScript(p: {
   return `
 import torch
 import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
 import json
 
 # --- Dataset ---
@@ -111,7 +112,24 @@ split = int(N * ${p.train_ratio})
 perm_all = torch.randperm(N)
 X_train, Y_train = X[perm_all[:split]], Y[perm_all[:split]]
 X_test,  Y_test  = X[perm_all[split:]], Y[perm_all[split:]]
-N_train = X_train.shape[0]
+
+# --- Dataset & DataLoader ---
+class TensorPairDataset(Dataset):
+    def __init__(self, features, targets):
+        self.features = features
+        self.targets = targets
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+        return self.features[idx], self.targets[idx]
+
+train_ds = TensorPairDataset(X_train, Y_train)
+test_ds  = TensorPairDataset(X_test, Y_test)
+
+train_loader = DataLoader(train_ds, batch_size=${p.batch_size}, shuffle=True)
+test_loader  = DataLoader(test_ds,  batch_size=${p.batch_size}, shuffle=False)
 
 # --- Model ---
 model = nn.Sequential(
@@ -124,21 +142,15 @@ criterion = nn.MSELoss()
 opt = torch.optim.SGD(model.parameters(), lr=${p.learning_rate})
 
 # --- Train ---
-batch_size = ${p.batch_size}
 epochs = ${p.epochs}
 train_loss_curve = []
 test_loss_curve = []
 
 for epoch in range(epochs):
     model.train()
-    perm = torch.randperm(N_train)
-    X_shuf = X_train[perm]
-    Y_shuf = Y_train[perm]
     epoch_loss = 0.0
     n_batches = 0
-    for i in range(0, N_train, batch_size):
-        xb = X_shuf[i:i+batch_size]
-        yb = Y_shuf[i:i+batch_size]
+    for xb, yb in train_loader:
         pred = model(xb)
         loss = criterion(pred, yb)
         opt.zero_grad()
@@ -148,12 +160,15 @@ for epoch in range(epochs):
         n_batches += 1
     train_loss_curve.append(epoch_loss / max(n_batches, 1))
 
-    # Evaluate on test set
     model.eval()
+    test_epoch_loss = 0.0
+    test_batches = 0
     with torch.no_grad():
-        test_pred = model(X_test)
-        test_loss = criterion(test_pred, Y_test).item()
-    test_loss_curve.append(test_loss)
+        for xb, yb in test_loader:
+            test_loss = criterion(model(xb), yb).item()
+            test_epoch_loss += test_loss
+            test_batches += 1
+    test_loss_curve.append(test_epoch_loss / max(test_batches, 1))
 
 print(json.dumps({
     "loss_curve": train_loss_curve,

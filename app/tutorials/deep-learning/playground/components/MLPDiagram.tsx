@@ -360,6 +360,7 @@ Y = (t / (4 * torch.pi)).unsqueeze(1).expand(-1, output_dim)`,
 
   return `import torch
 import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
 
 # ── Hyperparameters ──────────────────────────────────────
 input_dim   = ${inputCount}
@@ -380,7 +381,24 @@ split = int(N * ${((100 - testPct) / 100).toFixed(2)})
 perm_all = torch.randperm(N)
 X_train, Y_train = X[perm_all[:split]], Y[perm_all[:split]]
 X_test,  Y_test  = X[perm_all[split:]], Y[perm_all[split:]]
-N_train = X_train.shape[0]
+
+# ── Dataset & DataLoader ────────────────────────────────
+class TensorPairDataset(Dataset):
+    def __init__(self, features, targets):
+        self.features = features
+        self.targets = targets
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+        return self.features[idx], self.targets[idx]
+
+train_ds = TensorPairDataset(X_train, Y_train)
+test_ds  = TensorPairDataset(X_test, Y_test)
+
+train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False)
 
 # ── Model ────────────────────────────────────────────────
 model = nn.Sequential(
@@ -398,15 +416,10 @@ test_loss_curve = []
 
 for epoch in range(epochs):
     model.train()
-    perm = torch.randperm(N_train)
-    X_shuf = X_train[perm]
-    Y_shuf = Y_train[perm]
     epoch_loss = 0.0
     n_batches = 0
 
-    for i in range(0, N_train, batch_size):
-        xb = X_shuf[i : i + batch_size]
-        yb = Y_shuf[i : i + batch_size]
+    for xb, yb in train_loader:
         pred = model(xb)
         loss = criterion(pred, yb)
         optimizer.zero_grad()
@@ -418,15 +431,18 @@ for epoch in range(epochs):
     avg_loss = epoch_loss / max(n_batches, 1)
     train_loss_curve.append(avg_loss)
 
-    # Evaluate on test set
     model.eval()
+    test_epoch_loss = 0.0
+    test_batches = 0
     with torch.no_grad():
-        test_pred = model(X_test)
-        test_loss = criterion(test_pred, Y_test).item()
-    test_loss_curve.append(test_loss)
+        for xb, yb in test_loader:
+            test_loss = criterion(model(xb), yb).item()
+            test_epoch_loss += test_loss
+            test_batches += 1
+    test_loss_curve.append(test_epoch_loss / max(test_batches, 1))
 
     if (epoch + 1) % ${Math.max(1, Math.round(epochs / 10))} == 0:
-        print(f"Epoch {epoch + 1:>4d}/{epochs}  Train: {avg_loss:.6f}  Test: {test_loss:.6f}")
+        print(f"Epoch {epoch + 1:>4d}/{epochs}  Train: {avg_loss:.6f}  Test: {test_loss_curve[-1]:.6f}")
 
 print(f"\\nFinal train loss: {train_loss_curve[-1]:.6f}")
 print(f"Final test loss:  {test_loss_curve[-1]:.6f}")`;
@@ -521,11 +537,15 @@ export function MLPDiagram() {
   const [displayTestLoss, setDisplayTestLoss] = useState<number | null>(null);
   const [training, setTraining] = useState(false);
   const [trainError, setTrainError] = useState<string | null>(null);
-  const [showCode, setShowCode] = useState(false);
+  const [codeWidth, setCodeWidth] = useState(0);
+  const showCode = codeWidth > 0;
+  const CODE_DEFAULT = 512;
+  const CODE_MIN = 360;
+  const CODE_MAX = typeof window !== "undefined" ? window.innerWidth * 0.8 : 1200;
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const animRef = useRef<number>(0);
   const displayLossRef = useRef<number | null>(null);
   const displayTestLossRef = useRef<number | null>(null);
-
   const stopAnimation = useCallback(() => {
     if (animRef.current) {
       cancelAnimationFrame(animRef.current);
@@ -665,6 +685,7 @@ export function MLPDiagram() {
 
   return (
     <>
+    <div>
     <div className="not-prose mt-8 flex flex-wrap items-end gap-6 border-y border-border py-4">
       <div className="flex items-center gap-3 self-end pb-0.5">
         <button
@@ -954,13 +975,14 @@ export function MLPDiagram() {
         )}
       </aside>
     </figure>
-    <div className="not-prose my-8 mx-auto w-full max-w-3xl">
+    <div className="not-prose my-8 w-full max-w-3xl">
       <LossChart
         fullCurve={fullCurve}
         fullTestCurve={fullTestCurve}
         visibleCurve={visibleCurve}
         visibleTestCurve={visibleTestCurve}
       />
+    </div>
     </div>
     {/* PyTorch code sidebar */}
     {(() => {
@@ -983,13 +1005,12 @@ export function MLPDiagram() {
           {/* Edge tab — fixed to right edge, always visible, vertically centered */}
           <button
             type="button"
-            onClick={() => setShowCode((v) => !v)}
+            onClick={() => setCodeWidth((w) => (w > 0 ? 0 : CODE_DEFAULT))}
             aria-expanded={showCode}
             aria-controls="pytorch-code-sidebar"
             aria-label={showCode ? "Close PyTorch code" : "Show PyTorch code"}
-            className={`fixed top-1/2 z-50 flex h-28 w-10 -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-lg border border-r-0 border-border bg-background text-foreground/70 shadow-lg transition-all duration-300 ease-in-out hover:bg-accent/10 hover:text-foreground ${
-              showCode ? "right-[32rem]" : "right-0"
-            }`}
+            className="fixed top-1/2 z-50 flex h-28 w-10 -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-lg border border-r-0 border-border bg-background text-foreground/70 shadow-lg hover:bg-accent/10 hover:text-foreground"
+            style={{ right: showCode ? `${codeWidth}px` : 0 }}
           >
             <svg
               viewBox="0 0 24 24"
@@ -1009,11 +1030,39 @@ export function MLPDiagram() {
 {/* Sidebar panel */}
           <aside
             id="pytorch-code-sidebar"
-            className={`fixed top-0 right-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-border bg-background shadow-2xl transition-transform duration-300 ease-in-out ${
+            className={`fixed top-0 right-0 z-50 flex h-full flex-col border-l border-border bg-background shadow-2xl transition-transform duration-300 ease-in-out ${
               showCode ? "translate-x-0" : "translate-x-full"
             }`}
+            style={{ width: `${codeWidth || CODE_DEFAULT}px` }}
             aria-label="PyTorch code sidebar"
           >
+            {/* Drag handle */}
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                dragRef.current = { startX: e.clientX, startW: codeWidth };
+                const onMove = (ev: MouseEvent) => {
+                  if (!dragRef.current) return;
+                  const delta = dragRef.current.startX - ev.clientX;
+                  const next = Math.min(CODE_MAX, Math.max(CODE_MIN, dragRef.current.startW + delta));
+                  setCodeWidth(next);
+                };
+                const onUp = () => {
+                  dragRef.current = null;
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                  document.body.style.cursor = "";
+                  document.body.style.userSelect = "";
+                };
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+                document.addEventListener("mousemove", onMove);
+                document.addEventListener("mouseup", onUp);
+              }}
+              className="absolute top-0 left-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors"
+              aria-label="Resize sidebar"
+              role="separator"
+            />
             {/* Header */}
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex flex-col gap-0.5">
@@ -1028,7 +1077,7 @@ export function MLPDiagram() {
                 <CopyButton text={code} />
                 <button
                   type="button"
-                  onClick={() => setShowCode(false)}
+                  onClick={() => setCodeWidth(0)}
                   aria-label="Close sidebar"
                   className="flex h-8 w-8 items-center justify-center rounded-md text-foreground/60 transition hover:bg-accent/10 hover:text-foreground"
                 >
