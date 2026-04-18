@@ -74,17 +74,22 @@ function LayerControl({
 }
 
 const DATASETS = [
-  { value: "randn", label: "randn" },
   { value: "circle", label: "Circle" },
   { value: "xor", label: "XOR" },
   { value: "gaussian", label: "Gaussian" },
   { value: "spiral", label: "Spiral" },
+  { value: "randn", label: "randn" },
 ] as const;
 
 type DatasetValue = (typeof DATASETS)[number]["value"];
 
 const LEARNING_RATES = [0.0001, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10];
 const ACTIVATIONS = ["ReLU", "Tanh", "Sigmoid", "Linear"] as const;
+const ACTIVATION_COLORS: Record<string, string> = {
+  ReLU: "#f97316",
+  Tanh: "#8b5cf6",
+  Sigmoid: "#06b6d4",
+};
 const LOSS_FNS = ["MSE"] as const;
 const OPTIMIZERS = ["SGD"] as const;
 const BATCH_SIZES = [1, 64];
@@ -158,10 +163,11 @@ function LossChart({
 
   // Build polylines using the same axis scale as the ticks
   const toPolyline = (visible: number[], full: number[]) => {
-    if (visible.length < 2) return "";
+    if (visible.length === 0) return "";
+    const denom = Math.max(full.length - 1, 1);
     return visible
       .map((v, i) => {
-        const x = LEFT + (i / (full.length - 1)) * PW;
+        const x = LEFT + (i / denom) * PW;
         const y = TOP + (1 - (v - axisMin) / axisRange) * PH;
         return `${x.toFixed(2)},${y.toFixed(2)}`;
       })
@@ -177,11 +183,12 @@ function LossChart({
   const xTicks: { epoch: number; x: number }[] = [];
   if (totalEpochs > 0) {
     const lastEpoch = totalEpochs;
+    const xDenom = Math.max(totalEpochs - 1, 1);
     for (let e = 0; e <= lastEpoch; e += xStep) {
-      xTicks.push({ epoch: e, x: LEFT + (e / (totalEpochs - 1)) * PW });
+      xTicks.push({ epoch: e, x: LEFT + (e / xDenom) * PW });
     }
     if (!xTicks.some((t) => t.epoch === lastEpoch)) {
-      const finalX = LEFT + (lastEpoch / (totalEpochs - 1)) * PW;
+      const finalX = LEFT + (lastEpoch / xDenom) * PW;
       if (xTicks.length > 0 && finalX - xTicks[xTicks.length - 1].x < PW * 0.08) {
         xTicks.pop();
       }
@@ -535,7 +542,7 @@ export function MLPDiagram() {
   const [inputCount, setInputCount] = useState(4);
   const [hiddenCount, setHiddenCount] = useState(6);
   const [outputCount, setOutputCount] = useState(2);
-  const [dataset, setDataset] = useState<DatasetValue>("randn");
+  const [dataset, setDataset] = useState<DatasetValue>("circle");
   const [learningRate, setLearningRate] = useState(0.03);
   const [activation, setActivation] = useState<Activation>("Tanh");
   const [lossFn, setLossFn] = useState<LossFn>("MSE");
@@ -630,6 +637,23 @@ export function MLPDiagram() {
 
   useEffect(() => stopAnimation, [stopAnimation]);
 
+  function trainBody(epochCount: number) {
+    return JSON.stringify({
+      dataset,
+      input_count: inputCount,
+      hidden_count: hiddenCount,
+      output_count: outputCount,
+      learning_rate: learningRate,
+      activation,
+      loss_fn: lossFn,
+      optimizer,
+      batch_size: batchSize,
+      epochs: epochCount,
+      sample_size: sampleSize,
+      train_ratio: (100 - testPct) / 100,
+    });
+  }
+
   async function handleTrain() {
     setTraining(true);
     setTrainError(null);
@@ -643,20 +667,7 @@ export function MLPDiagram() {
       const res = await fetch("/api/train", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataset,
-          input_count: inputCount,
-          hidden_count: hiddenCount,
-          output_count: outputCount,
-          learning_rate: learningRate,
-          activation,
-          loss_fn: lossFn,
-          optimizer,
-          batch_size: batchSize,
-          epochs,
-          sample_size: sampleSize,
-          train_ratio: (100 - testPct) / 100,
-        }),
+        body: trainBody(epochs),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as {
@@ -668,6 +679,36 @@ export function MLPDiagram() {
       setFullCurve(data.loss_curve);
       setFullTestCurve(data.test_loss_curve);
       animateCurve(data.loss_curve, data.test_loss_curve);
+    } catch (err) {
+      setTrainError(err instanceof Error ? err.message : "Training failed");
+    } finally {
+      setTraining(false);
+    }
+  }
+
+  async function handleStep() {
+    const nextEpoch = fullCurve.length + 1;
+    setTraining(true);
+    setTrainError(null);
+    stopAnimation();
+    try {
+      const res = await fetch("/api/train", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: trainBody(nextEpoch),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as {
+        loss_curve: number[];
+        test_loss_curve: number[];
+        final_loss: number;
+        final_test_loss: number;
+      };
+      setFullCurve(data.loss_curve);
+      setFullTestCurve(data.test_loss_curve);
+      setVisibleCount(data.loss_curve.length);
+      setDisplayLoss(data.final_loss);
+      setDisplayTestLoss(data.final_test_loss);
     } catch (err) {
       setTrainError(err instanceof Error ? err.message : "Training failed");
     } finally {
@@ -717,9 +758,21 @@ export function MLPDiagram() {
         </button>
         <button
           type="button"
+          onClick={handleStep}
+          disabled={training}
+          aria-label="Train one epoch"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground/70 transition hover:bg-accent/10 hover:text-foreground disabled:opacity-30"
+        >
+          <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor">
+            <polygon points="5,5 15,12 5,19" />
+            <rect x={16} y={5} width={3} height={14} rx={0.5} />
+          </svg>
+        </button>
+        <button
+          type="button"
           onClick={handleTrain}
           disabled={training}
-          aria-label={training ? "Training" : "Start training"}
+          aria-label={training ? "Training" : `Train all ${epochs} epochs`}
           className="flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background transition hover:opacity-90 disabled:opacity-60"
         >
           <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor">
@@ -930,14 +983,22 @@ export function MLPDiagram() {
             />
           ))}
           {hidden.map((p, i) => (
-            <circle
-              key={`hd-${i}`}
-              cx={p.x}
-              cy={p.y}
-              r={NEURON_RADIUS}
-              className="fill-background stroke-accent"
-              strokeWidth={2}
-            />
+            <g key={`hd-${i}`}>
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={NEURON_RADIUS}
+                className="fill-background stroke-accent"
+                strokeWidth={2}
+              />
+              {activation !== "Linear" && (
+                <path
+                  d={`M ${p.x} ${p.y - NEURON_RADIUS} A ${NEURON_RADIUS} ${NEURON_RADIUS} 0 0 1 ${p.x} ${p.y + NEURON_RADIUS} Z`}
+                  fill={ACTIVATION_COLORS[activation]}
+                  opacity={0.35}
+                />
+              )}
+            </g>
           ))}
           {outputs.map((p, i) => (
             <circle
@@ -982,7 +1043,7 @@ export function MLPDiagram() {
         <div className="flex flex-col gap-1 rounded-md border border-border bg-background px-3 py-2 text-sm">
           <div className="flex justify-between">
             <span className="text-foreground/70">Epoch</span>
-            <span className="font-mono">{visibleCount > 0 ? `${visibleCount}/${fullCurve.length}` : "—"}</span>
+            <span className="font-mono">{visibleCount > 0 ? `${visibleCount}/${epochs}` : "—"}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-foreground/70">Train loss</span>
