@@ -7,35 +7,6 @@ import { NotationProvider, NotationSwitch, Equation } from "./components/Notatio
 
 <NotationSwitch />
 
-## The warmup
-
-During warmup the learning rate increases linearly from a
-small value to the target peak over a set number of steps:
-
-<Equation
-  code={String.raw`\color{#f59e0b} \text{lr} = \text{warmup\_start\_lr} + \text{epoch} \cdot \frac{\text{base\_lr} - \text{warmup\_start\_lr}}{\text{warmup\_epochs} - 1}`}
-  math={String.raw`\Large \color{#f59e0b} \eta_t = \eta_{\text{start}} + t \cdot \frac{\eta_{\text{peak}} - \eta_{\text{start}}}{T_{\text{warmup}} - 1}`}
-/>
-
-## The cosine decay
-
-After warmup, the learning rate follows a cosine curve from the peak
-down to a minimum value:
-
-<Equation
-  code={String.raw`\color{#6366f1} \text{lr} = \text{min\_lr} + \tfrac{1}{2}(\text{base\_lr} - \text{min\_lr}) \left(1 + \cos\!\left(\pi \cdot \frac{\text{epoch} - \text{warmup\_epochs}}{\text{max\_epochs} - \text{warmup\_epochs}}\right)\right)`}
-  math={String.raw`\Large \color{#6366f1} \eta_t = \eta_{\min} + \tfrac{1}{2}(\eta_{\text{peak}} - \eta_{\min}) \left(1 + \cos\!\left(\pi \cdot \frac{t - T_{\text{warmup}}}{T_{\max} - T_{\text{warmup}}}\right)\right)`}
-/>
-
-Why cosine and not linear? Cosine keeps the learning rate near the peak
-for longer in the middle of training (where most useful learning
-happens), then accelerates the decay toward the end. The initial descent
-is gentle, the final descent is steep — and the transition is smooth,
-with no discontinuities.
-
-## The full schedule
-
-Combining both phases:
 
 <Equation
   code={String.raw`\text{lr} = \begin{cases} \color{#f59e0b} \text{warmup\_start\_lr} + \text{epoch} \cdot \dfrac{\text{base\_lr} - \text{warmup\_start\_lr}}{\text{warmup\_epochs} - 1} & \color{#f59e0b} \text{epoch} < \text{warmup\_epochs} \\[12pt] \color{#6366f1} \text{min\_lr} + \tfrac{1}{2}(\text{base\_lr} - \text{min\_lr})\!\left(1 + \cos\!\left(\pi \cdot \dfrac{\text{epoch} - \text{warmup\_epochs}}{\text{max\_epochs} - \text{warmup\_epochs}}\right)\right) & \color{#6366f1} \text{otherwise} \end{cases}`}
