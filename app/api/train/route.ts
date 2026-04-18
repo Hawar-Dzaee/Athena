@@ -132,11 +132,15 @@ train_loader = DataLoader(train_ds, batch_size=${p.batch_size}, shuffle=True)
 test_loader  = DataLoader(test_ds,  batch_size=${p.batch_size}, shuffle=False)
 
 # --- Model ---
-model = nn.Sequential(
+${p.hidden_count > 0
+  ? `model = nn.Sequential(
     nn.Linear(input_dim, ${p.hidden_count}),
     ${act},
     nn.Linear(${p.hidden_count}, output_dim),
-)
+)`
+  : `model = nn.Sequential(
+    nn.Linear(input_dim, output_dim),
+)`}
 
 criterion = nn.MSELoss()
 opt = torch.optim.SGD(model.parameters(), lr=${p.learning_rate})

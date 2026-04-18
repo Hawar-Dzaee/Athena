@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { codeToHtml } from "shiki";
 
 const MIN_NEURONS = 1;
+const MIN_HIDDEN = 0;
 const MAX_NEURONS = 8;
 
 const WIDTH = 640;
@@ -37,10 +38,12 @@ function LayerControl({
   label,
   count,
   setCount,
+  min = MIN_NEURONS,
 }: {
   label: string;
   count: number;
   setCount: (n: number) => void;
+  min?: number;
 }) {
   return (
     <div className="flex flex-col items-center gap-1">
@@ -48,8 +51,8 @@ function LayerControl({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => setCount(Math.max(MIN_NEURONS, count - 1))}
-          disabled={count <= MIN_NEURONS}
+          onClick={() => setCount(Math.max(min, count - 1))}
+          disabled={count <= min}
           aria-label={`Decrease ${label} neurons`}
           className="h-7 w-7 rounded-full border border-border text-foreground/80 transition hover:bg-accent/10 disabled:opacity-30"
         >
@@ -358,14 +361,29 @@ X = X + torch.randn_like(X) * 0.05
 Y = (t / (4 * torch.pi)).unsqueeze(1).expand(-1, output_dim)`,
   };
 
+  const modelBlock = hiddenCount > 0
+    ? `input_dim   = ${inputCount}
+hidden_dim  = ${hiddenCount}
+output_dim  = ${outputCount}`
+    : `input_dim   = ${inputCount}
+output_dim  = ${outputCount}`;
+
+  const modelDef = hiddenCount > 0
+    ? `model = nn.Sequential(
+    nn.Linear(input_dim, hidden_dim),
+    ${act},
+    nn.Linear(hidden_dim, output_dim),
+)`
+    : `model = nn.Sequential(
+    nn.Linear(input_dim, output_dim),
+)`;
+
   return `import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 # ── Hyperparameters ──────────────────────────────────────
-input_dim   = ${inputCount}
-hidden_dim  = ${hiddenCount}
-output_dim  = ${outputCount}
+${modelBlock}
 lr          = ${learningRate}
 epochs      = ${epochs}
 batch_size  = ${batchSize}
@@ -401,11 +419,7 @@ train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
 test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False)
 
 # ── Model ────────────────────────────────────────────────
-model = nn.Sequential(
-    nn.Linear(input_dim, hidden_dim),
-    ${act},
-    nn.Linear(hidden_dim, output_dim),
-)
+${modelDef}
 
 criterion = nn.MSELoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=lr)
@@ -675,12 +689,13 @@ export function MLPDiagram() {
   const visibleCurve = fullCurve.slice(0, visibleCount);
   const visibleTestCurve = fullTestCurve.slice(0, visibleCount);
 
-  const inputX = layerX(0, 3);
-  const hiddenX = layerX(1, 3);
-  const outputX = layerX(2, 3);
+  const totalLayers = hiddenCount > 0 ? 3 : 2;
+  const inputX = layerX(0, totalLayers);
+  const hiddenX = hiddenCount > 0 ? layerX(1, totalLayers) : 0;
+  const outputX = layerX(totalLayers - 1, totalLayers);
 
   const inputs = neuronPositions(inputCount, inputX);
-  const hidden = neuronPositions(hiddenCount, hiddenX);
+  const hidden = hiddenCount > 0 ? neuronPositions(hiddenCount, hiddenX) : [];
   const outputs = neuronPositions(outputCount, outputX);
 
   return (
@@ -871,7 +886,7 @@ export function MLPDiagram() {
       <div className="flex flex-1 flex-col items-center gap-4">
       <div className="grid w-full max-w-3xl grid-cols-3 gap-4 px-4">
         <LayerControl label="Input" count={inputCount} setCount={setInputCount} />
-        <LayerControl label="Hidden" count={hiddenCount} setCount={setHiddenCount} />
+        <LayerControl label="Hidden" count={hiddenCount} setCount={setHiddenCount} min={MIN_HIDDEN} />
         <LayerControl label="Output" count={outputCount} setCount={setOutputCount} />
       </div>
       <svg
@@ -881,15 +896,25 @@ export function MLPDiagram() {
         aria-label="Multi-layer perceptron with input, hidden, and output layers"
       >
         <g stroke="currentColor" className="text-border" strokeWidth={1} fill="none" opacity={0.6}>
-          {inputs.map((a, i) =>
-            hidden.map((b, j) => (
-              <path key={`ih-${i}-${j}`} d={curvePath(a, b)} />
-            )),
-          )}
-          {hidden.map((a, i) =>
-            outputs.map((b, j) => (
-              <path key={`ho-${i}-${j}`} d={curvePath(a, b)} />
-            )),
+          {hiddenCount > 0 ? (
+            <>
+              {inputs.map((a, i) =>
+                hidden.map((b, j) => (
+                  <path key={`ih-${i}-${j}`} d={curvePath(a, b)} />
+                )),
+              )}
+              {hidden.map((a, i) =>
+                outputs.map((b, j) => (
+                  <path key={`ho-${i}-${j}`} d={curvePath(a, b)} />
+                )),
+              )}
+            </>
+          ) : (
+            inputs.map((a, i) =>
+              outputs.map((b, j) => (
+                <path key={`io-${i}-${j}`} d={curvePath(a, b)} />
+              )),
+            )
           )}
         </g>
 
