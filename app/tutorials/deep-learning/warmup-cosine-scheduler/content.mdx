@@ -1,42 +1,31 @@
 import { WarmupCosineExplorer } from "./components/WarmupCosineExplorer";
+import { NotationProvider, NotationSwitch, Equation } from "./components/NotationToggle";
 
 # Warmup Cosine Scheduler
 
-Most modern training runs don't use a fixed learning rate. They ramp up,
-then smoothly decay. The **warmup cosine schedule** is the most common
-pattern — used in vision transformers, language models, and contrastive
-learning alike.
+<NotationProvider>
 
-The idea is simple: start slow, peak, then coast down to near-zero
-following a cosine curve. But the details matter — too short a warmup
-destabilizes early training, too long wastes capacity on a cautious ramp.
+<NotationSwitch />
 
-## Why warmup?
+## The warmup
 
-At initialization, weights are random and gradients are noisy. A large
-learning rate on the first few steps can push the network into a region
-it can't recover from — loss spikes, gradients explode, and training
-diverges.
+During warmup the learning rate increases linearly from a
+small value to the target peak over a set number of steps:
 
-**Warmup** solves this by linearly increasing the learning rate from a
-small value (often zero) to the target peak over a set number of steps:
-
-$$
-\eta_t = \eta_{\text{peak}} \cdot \frac{t}{T_{\text{warmup}}}, \quad t \leq T_{\text{warmup}}
-$$
-
-This gives the optimizer time to estimate gradient statistics (especially
-important for Adam-family optimizers whose running averages start cold)
-before taking full-sized steps.
+<Equation
+  code={String.raw`\color{#f59e0b} \text{lr} = \text{warmup\_start\_lr} + \text{epoch} \cdot \frac{\text{base\_lr} - \text{warmup\_start\_lr}}{\text{warmup\_epochs} - 1}`}
+  math={String.raw`\Large \color{#f59e0b} \eta_t = \eta_{\text{start}} + t \cdot \frac{\eta_{\text{peak}} - \eta_{\text{start}}}{T_{\text{warmup}} - 1}`}
+/>
 
 ## The cosine decay
 
 After warmup, the learning rate follows a cosine curve from the peak
 down to a minimum value:
 
-$$
-\eta_t = \eta_{\text{min}} + \frac{1}{2}(\eta_{\text{peak}} - \eta_{\text{min}}) \left(1 + \cos\!\left(\pi \cdot \frac{t - T_{\text{warmup}}}{T_{\text{total}} - T_{\text{warmup}}}\right)\right)
-$$
+<Equation
+  code={String.raw`\color{#6366f1} \text{lr} = \text{min\_lr} + \tfrac{1}{2}(\text{base\_lr} - \text{min\_lr}) \left(1 + \cos\!\left(\pi \cdot \frac{\text{epoch} - \text{warmup\_epochs}}{\text{max\_epochs} - \text{warmup\_epochs}}\right)\right)`}
+  math={String.raw`\Large \color{#6366f1} \eta_t = \eta_{\min} + \tfrac{1}{2}(\eta_{\text{peak}} - \eta_{\min}) \left(1 + \cos\!\left(\pi \cdot \frac{t - T_{\text{warmup}}}{T_{\max} - T_{\text{warmup}}}\right)\right)`}
+/>
 
 Why cosine and not linear? Cosine keeps the learning rate near the peak
 for longer in the middle of training (where most useful learning
@@ -48,39 +37,11 @@ with no discontinuities.
 
 Combining both phases:
 
-$$
-\eta_t = \begin{cases}
-\eta_{\text{peak}} \cdot \dfrac{t}{T_{\text{warmup}}} & t \leq T_{\text{warmup}} \\[8pt]
-\eta_{\text{min}} + \dfrac{1}{2}(\eta_{\text{peak}} - \eta_{\text{min}})\!\left(1 + \cos\!\left(\pi \cdot \dfrac{t - T_{\text{warmup}}}{T_{\text{total}} - T_{\text{warmup}}}\right)\right) & t > T_{\text{warmup}}
-\end{cases}
-$$
+<Equation
+  code={String.raw`\text{lr} = \begin{cases} \color{#f59e0b} \text{warmup\_start\_lr} + \text{epoch} \cdot \dfrac{\text{base\_lr} - \text{warmup\_start\_lr}}{\text{warmup\_epochs} - 1} & \color{#f59e0b} \text{epoch} < \text{warmup\_epochs} \\[12pt] \color{#6366f1} \text{min\_lr} + \tfrac{1}{2}(\text{base\_lr} - \text{min\_lr})\!\left(1 + \cos\!\left(\pi \cdot \dfrac{\text{epoch} - \text{warmup\_epochs}}{\text{max\_epochs} - \text{warmup\_epochs}}\right)\right) & \color{#6366f1} \text{otherwise} \end{cases}`}
+  math={String.raw`\Large \eta_t = \begin{cases} \color{#f59e0b} \eta_{\text{start}} + t \cdot \dfrac{\eta_{\text{peak}} - \eta_{\text{start}}}{T_{\text{warmup}} - 1} & \color{#f59e0b} t < T_{\text{warmup}} \\[12pt] \color{#6366f1} \eta_{\min} + \tfrac{1}{2}(\eta_{\text{peak}} - \eta_{\min})\!\left(1 + \cos\!\left(\pi \cdot \dfrac{t - T_{\text{warmup}}}{T_{\max} - T_{\text{warmup}}}\right)\right) & \color{#6366f1} \text{otherwise} \end{cases}`}
+/>
 
-## Explore it
-
-Drag the sliders to reshape the schedule. Watch how warmup fraction,
-peak LR, and minimum LR change the curve. The shaded regions show the
-warmup and decay phases.
+</NotationProvider>
 
 <WarmupCosineExplorer />
-
-## Where you'll see this
-
-- **Vision Transformers (ViT, DeiT):** 5–10 epochs of warmup out of 300
-  total, cosine decay to zero.
-- **BERT / GPT pretraining:** warmup over the first 1–2% of steps,
-  cosine or linear decay for the rest.
-- **Contrastive learning (SimCLR, BYOL, VICReg):** 10 epochs of warmup,
-  cosine decay — the warmup prevents early representation collapse.
-- **Fine-tuning:** shorter warmup (often just 5–10% of steps) since the
-  model starts from a good initialization.
-
-## Key takeaways
-
-- **Warmup stabilizes early training** by giving optimizers time to
-  accumulate gradient statistics before taking large steps.
-- **Cosine decay lingers near the peak** then drops steeply — this
-  allocates more training budget to the productive middle phase.
-- **The warmup fraction is a design choice.** Pretraining from scratch
-  needs more warmup; fine-tuning needs less.
-- **Minimum LR > 0** can help — a tiny residual learning rate prevents
-  the optimizer from fully stalling at the end of training.
