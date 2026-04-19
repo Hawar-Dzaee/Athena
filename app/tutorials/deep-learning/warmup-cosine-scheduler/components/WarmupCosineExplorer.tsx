@@ -244,7 +244,7 @@ export function WarmupCosineExplorer() {
             description="LR at the start of warmup (bottom of the yellow line)"
             value={warmupStartLR}
             min={0}
-            max={baseLR - 0.0001}
+            max={0.3}
             step={0.00001}
             onChange={setWarmupStartLR}
             format={(v) => v.toFixed(5)}
