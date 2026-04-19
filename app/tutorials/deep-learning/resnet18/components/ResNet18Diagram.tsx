@@ -633,20 +633,6 @@ function DetailSidebar({
           )}
         </div>
 
-        {/* Legend footer */}
-        <div className="shrink-0 border-t border-border/50 bg-muted/20 px-4 py-3">
-          <div className="text-[10px] font-semibold tracking-wide text-foreground/45 uppercase">
-            Sublayer colors
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-            {(Object.keys(SUBLAYER_COLORS) as SublayerType[]).map((t) => (
-              <div key={t} className="flex items-center gap-1.5">
-                <div className="h-2 w-2 rounded-sm" style={{ background: SUBLAYER_COLORS[t] }} />
-                <span className="text-[10px] text-foreground/60">{SUBLAYER_LABELS[t]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </aside>
     </>
   );
