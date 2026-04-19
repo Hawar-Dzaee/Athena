@@ -24,6 +24,7 @@ import {
   accentFor,
   formatParams,
   formatShape,
+  STAGE_ACCENTS,
   type BasicBlockSpec,
   type DiagramNode,
   type Sublayer,
@@ -69,14 +70,19 @@ function classifySublayer(sl: Sublayer): SublayerType {
 // Layout
 // ---------------------------------------------------------------------------
 
-const NODE_W = 110;
-const HEADER_H = 28;
-const BAND_H = 32;
-const X_STEP = 140;
+const NODE_W = 180;
+const HEADER_H = 44;
+const BAND_H = 56;
+const X_STEP = 380;
+
+function nodeBoxHeight(spec: DiagramNode): number {
+  const count = "sublayers" in spec ? spec.sublayers.length : 0;
+  if (count > 0) return count * BAND_H;
+  return HEADER_H + BAND_H;
+}
 
 function nodeHeight(spec: DiagramNode): number {
-  const count = "sublayers" in spec ? spec.sublayers.length : 0;
-  return HEADER_H + Math.max(count, 1) * BAND_H;
+  return HEADER_H + nodeBoxHeight(spec);
 }
 
 const LAYOUT: Record<string, { row: 0; col: number }> = {
@@ -99,6 +105,10 @@ const LAYOUT: Record<string, { row: 0; col: number }> = {
 // Node data types
 // ---------------------------------------------------------------------------
 
+const GROUP_PAD_X = 50;
+const GROUP_PAD_TOP = 140;
+const GROUP_PAD_BOTTOM = 40;
+
 type DiagramNodeData = {
   spec: DiagramNode;
   accent: string;
@@ -107,13 +117,43 @@ type DiagramNodeData = {
   nodeH: number;
 };
 
+type LayerGroupData = {
+  accent: string;
+  label: string;
+  w: number;
+  h: number;
+};
+
 type StageRFNode = Node<DiagramNodeData, "stage">;
 type BasicBlockRFNode = Node<DiagramNodeData, "basicblock">;
-type AnyRFNode = StageRFNode | BasicBlockRFNode;
+type LayerGroupRFNode = Node<LayerGroupData, "layerGroup">;
+type AnyRFNode = StageRFNode | BasicBlockRFNode | LayerGroupRFNode;
 
 // ---------------------------------------------------------------------------
 // Custom node components
 // ---------------------------------------------------------------------------
+
+function LayerGroupComp({ data }: NodeProps<LayerGroupRFNode>) {
+  return (
+    <div style={{ position: "relative", width: data.w, height: data.h }}>
+      <span
+        className="absolute left-0 text-[36px] font-bold tracking-wide"
+        style={{ color: data.accent, top: -50 }}
+      >
+        {data.label}
+      </span>
+      <div
+        className="rounded-2xl border"
+        style={{
+          width: data.w,
+          height: data.h,
+          borderColor: `${data.accent}40`,
+          background: `${data.accent}08`,
+        }}
+      />
+    </div>
+  );
+}
 
 function NodeShell({
   spec,
@@ -127,89 +167,99 @@ function NodeShell({
   height: number;
 }) {
   const sublayers: readonly Sublayer[] = "sublayers" in spec ? spec.sublayers : [];
+  const boxH = height - HEADER_H;
 
   return (
-    <div
-      className="relative flex flex-col overflow-hidden rounded-xl border-2 shadow-sm backdrop-blur-sm transition"
-      style={{
-        width: NODE_W,
-        height,
-        borderColor: selected ? accent : `${accent}55`,
-        boxShadow: selected ? `0 0 0 4px ${accent}33` : undefined,
-      }}
-    >
-      <div
-        className="flex shrink-0 items-center justify-center"
-        style={{ height: HEADER_H, background: `${accent}30` }}
+    <div style={{ position: "relative", width: NODE_W, height }}>
+      <span
+        className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[14px] font-bold"
+        style={{ color: accent, top: 0 }}
       >
-        <span className="text-center text-[10px] font-bold leading-tight tracking-tight" style={{ color: accent }}>
-          {spec.label}
-        </span>
+        {spec.label}
+      </span>
+      <div
+        className="absolute bottom-0 flex flex-col overflow-hidden rounded-xl border-2 shadow-sm backdrop-blur-sm transition"
+        style={{
+          width: NODE_W,
+          height: boxH,
+          borderColor: selected ? accent : `${accent}55`,
+          boxShadow: selected ? `0 0 0 4px ${accent}33` : undefined,
+        }}
+      >
+        {sublayers.length > 0 ? (
+          <div className="flex flex-1 flex-col">
+            {sublayers.map((sl, i) => {
+              const slType = classifySublayer(sl);
+              const color = SUBLAYER_COLORS[slType];
+              const label = SUBLAYER_LABELS[slType];
+              return (
+                <div
+                  key={i}
+                  className="flex flex-1 items-center justify-center"
+                  style={{ background: `${color}22`, borderTop: i > 0 ? `1px solid ${color}30` : undefined }}
+                >
+                  <span className="text-[13px] font-semibold" style={{ color }}>{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center" style={{ background: `${accent}0a` }}>
+            <span className="text-center font-mono text-[13px] leading-tight text-foreground/50">
+              {spec.kind === "input" ? formatShape(spec.outShape) : spec.kind === "output" ? `${spec.logits}` : ""}
+            </span>
+          </div>
+        )}
       </div>
-      {sublayers.length > 0 ? (
-        <div className="flex flex-1 flex-col">
-          {sublayers.map((sl, i) => {
-            const slType = classifySublayer(sl);
-            const color = SUBLAYER_COLORS[slType];
-            const label = SUBLAYER_LABELS[slType];
-            return (
-              <div
-                key={i}
-                className="flex flex-1 items-center justify-center"
-                style={{ background: `${color}22`, borderTop: `1px solid ${color}30` }}
-              >
-                <span className="text-[9px] font-semibold" style={{ color }}>{label}</span>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex flex-1 items-center justify-center" style={{ background: `${accent}0a` }}>
-          <span className="text-center font-mono text-[9px] leading-tight text-foreground/50">
-            {spec.kind === "input" ? formatShape(spec.outShape) : spec.kind === "output" ? `${spec.logits}` : ""}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
 
+function handleTopForSpec(spec: DiagramNode): number {
+  const boxH = nodeBoxHeight(spec);
+  return HEADER_H + boxH / 2;
+}
+
 function StageNodeComp({ data }: NodeProps<StageRFNode>) {
+  const hTop = handleTopForSpec(data.spec);
+  const mainHandleStyle = { ...handleStyle, top: hTop };
   return (
     <>
-      <Handle type="target" position={Position.Left} id="main-in" style={handleStyle} />
-      <Handle type="source" position={Position.Right} id="main-out" style={handleStyle} />
+      <Handle type="target" position={Position.Left} id="main-in" style={mainHandleStyle} />
+      <Handle type="source" position={Position.Right} id="main-out" style={mainHandleStyle} />
       <NodeShell spec={data.spec} accent={data.accent} selected={data.selected} height={data.nodeH} />
     </>
   );
 }
 
 function BasicBlockNodeComp({ data }: NodeProps<BasicBlockRFNode>) {
+  const hTop = handleTopForSpec(data.spec);
+  const mainHandleStyle = { ...handleStyle, top: hTop };
   const skipSrcStyle = {
     ...hiddenHandleStyle,
-    left: 12,
-    top: -2,
+    left: -1,
+    top: hTop,
   } as React.CSSProperties;
   const skipDstStyle = {
     ...hiddenHandleStyle,
-    left: NODE_W - 12,
-    top: -2,
+    left: NODE_W + 1,
+    top: hTop,
   } as React.CSSProperties;
 
   return (
     <>
-      <Handle type="target" position={Position.Left} id="main-in" style={handleStyle} />
-      <Handle type="source" position={Position.Right} id="main-out" style={handleStyle} />
-      <Handle type="source" position={Position.Top} id="skip-src" style={skipSrcStyle} />
-      <Handle type="target" position={Position.Top} id="skip-dst" style={skipDstStyle} />
+      <Handle type="target" position={Position.Left} id="main-in" style={mainHandleStyle} />
+      <Handle type="source" position={Position.Right} id="main-out" style={mainHandleStyle} />
+      <Handle type="source" position={Position.Left} id="skip-src" style={skipSrcStyle} />
+      <Handle type="target" position={Position.Right} id="skip-dst" style={skipDstStyle} />
       <NodeShell spec={data.spec} accent={data.accent} selected={data.selected} height={data.nodeH} />
     </>
   );
 }
 
 const handleStyle: React.CSSProperties = {
-  width: 8,
-  height: 8,
+  width: 10,
+  height: 10,
   background: "var(--color-border)",
   border: "none",
 };
@@ -225,6 +275,7 @@ const hiddenHandleStyle: React.CSSProperties = {
 const nodeTypes = {
   stage: StageNodeComp,
   basicblock: BasicBlockNodeComp,
+  layerGroup: LayerGroupComp,
 };
 
 // ---------------------------------------------------------------------------
@@ -232,7 +283,7 @@ const nodeTypes = {
 // bypasses, making the skip connection visually distinct from the main flow.
 // ---------------------------------------------------------------------------
 
-type ResidualData = { accent: string; downsample: boolean; arcUp: boolean };
+type ResidualData = { accent: string; downsample: boolean; arcUp: boolean; nodeH: number };
 type ResidualEdge = Edge<ResidualData, "residual">;
 
 function ResidualEdgeComp({
@@ -246,10 +297,11 @@ function ResidualEdgeComp({
 }: EdgeProps<ResidualEdge>) {
   const accent = data?.accent ?? "#94a3b8";
   const downsample = Boolean(data?.downsample);
-  const offset = data?.arcUp ? -50 : 50;
-  const path = `M ${sourceX},${sourceY} C ${sourceX},${sourceY + offset} ${targetX},${targetY + offset} ${targetX},${targetY}`;
+  const nodeH = data?.nodeH ?? 300;
+  const hPad = 30;
+  const topY = sourceY - nodeH / 2 - 60;
   const midX = (sourceX + targetX) / 2;
-  const midY = (sourceY + targetY) / 2 + offset * 0.9;
+  const path = `M ${sourceX},${sourceY} L ${sourceX - hPad},${sourceY} L ${sourceX - hPad},${topY} L ${targetX + hPad},${topY} L ${targetX + hPad},${sourceY} L ${targetX},${targetY}`;
   return (
     <>
       <BaseEdge
@@ -265,11 +317,11 @@ function ResidualEdgeComp({
       />
       <text
         x={midX}
-        y={midY}
+        y={topY - 12}
         textAnchor="middle"
         dominantBaseline="middle"
         style={{
-          fontSize: 10,
+          fontSize: 13,
           fontFamily: "var(--font-mono)",
           fill: accent,
           pointerEvents: "none",
@@ -293,26 +345,70 @@ function buildGraph(
   specList: readonly DiagramNode[],
   selectedId: string | null,
 ): { nodes: AnyRFNode[]; edges: Edge[] } {
-  const nodes: AnyRFNode[] = specList.map((spec) => {
+  const maxH = Math.max(...specList.map(nodeHeight));
+  const nodes: AnyRFNode[] = [];
+
+  const LAYER_GROUPS: { id: string; label: string; accent: string; blocks: [string, string] }[] = [
+    { id: "grp-layer1", label: "Layer 1", accent: STAGE_ACCENTS.layer1, blocks: ["bb-1-0", "bb-1-1"] },
+    { id: "grp-layer2", label: "Layer 2", accent: STAGE_ACCENTS.layer2, blocks: ["bb-2-0", "bb-2-1"] },
+    { id: "grp-layer3", label: "Layer 3", accent: STAGE_ACCENTS.layer3, blocks: ["bb-3-0", "bb-3-1"] },
+    { id: "grp-layer4", label: "Layer 4", accent: STAGE_ACCENTS.layer4, blocks: ["bb-4-0", "bb-4-1"] },
+  ];
+
+  const blockToGroup = new Map<string, string>();
+  for (const grp of LAYER_GROUPS) {
+    for (const b of grp.blocks) blockToGroup.set(b, grp.id);
+  }
+
+  for (const grp of LAYER_GROUPS) {
+    const col0 = LAYOUT[grp.blocks[0]].col;
+    const col1 = LAYOUT[grp.blocks[1]].col;
+    const grpX = col0 * X_STEP - GROUP_PAD_X;
+    const grpY = -GROUP_PAD_TOP;
+    const grpW = (col1 - col0) * X_STEP + NODE_W + GROUP_PAD_X * 2;
+    const grpH = maxH + GROUP_PAD_TOP + GROUP_PAD_BOTTOM;
+
+    nodes.push({
+      id: grp.id,
+      type: "layerGroup",
+      position: { x: grpX, y: grpY },
+      data: { accent: grp.accent, label: grp.label, w: grpW, h: grpH },
+      draggable: false,
+      selectable: false,
+      zIndex: -1,
+      style: { width: grpW, height: grpH },
+    } as LayerGroupRFNode);
+  }
+
+  for (const spec of specList) {
     const layout = LAYOUT[spec.id];
-    const h = nodeHeight(spec);
+    const totalH = nodeHeight(spec);
+    const boxH = nodeBoxHeight(spec);
     const x = layout.col * X_STEP;
+    const y = (maxH - totalH) / 2;
+    const groupId = blockToGroup.get(spec.id);
+
     const data: DiagramNodeData = {
       spec,
       accent: accentFor(spec),
       selected: selectedId === spec.id,
       skipSide: "top",
-      nodeH: h,
+      nodeH: totalH,
     };
-    return {
+
+    const node = {
       id: spec.id,
       type: spec.kind === "basicblock" ? "basicblock" : "stage",
-      position: { x, y: 0 },
+      position: groupId
+        ? { x: x - (nodes.find((n) => n.id === groupId)!.position.x), y: y - (nodes.find((n) => n.id === groupId)!.position.y) }
+        : { x, y },
       data,
       draggable: false,
       selectable: true,
+      ...(groupId ? { parentId: groupId, extent: "parent" as const } : {}),
     };
-  });
+    nodes.push(node as AnyRFNode);
+  }
 
   const edges: Edge[] = [];
 
@@ -326,8 +422,8 @@ function buildGraph(
       target: b.id,
       sourceHandle: "main-out",
       targetHandle: "main-in",
-      type: "smoothstep",
-      style: { stroke: "var(--color-border)", strokeWidth: 2.5 },
+      type: "straight",
+      style: { stroke: "var(--color-border)", strokeWidth: 3 },
     });
   }
 
@@ -342,7 +438,7 @@ function buildGraph(
       sourceHandle: "skip-src",
       targetHandle: "skip-dst",
       type: "residual",
-      data: { accent: accentFor(bb), downsample: bb.downsample, arcUp: true },
+      data: { accent: accentFor(bb), downsample: bb.downsample, arcUp: true, nodeH: nodeHeight(bb) },
     });
   }
 
