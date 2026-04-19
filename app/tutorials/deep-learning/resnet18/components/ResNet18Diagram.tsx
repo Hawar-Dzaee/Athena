@@ -202,7 +202,7 @@ function NodeShell({
                   className="flex flex-1 items-center justify-center"
                   style={{ background: `${color}22`, borderTop: i > 0 ? `1px solid ${color}30` : undefined }}
                 >
-                  <span className="sr-only">{SUBLAYER_LABELS[slType]}</span>
+                  <span className="text-[8px] font-semibold leading-none" style={{ color }}>{SUBLAYER_LABELS[slType]}</span>
                 </div>
               );
             })}
@@ -758,15 +758,21 @@ function FlowCanvas({ specList, totalParams, selectedId, onSelect, onHoverChange
   );
 }
 
+const DEFAULT_N = 1;
+const DEFAULT_C: 1 | 3 = 3;
 const DEFAULT_H = 224;
 const DEFAULT_W = 224;
 
 export function ResNet18Diagram() {
   // Applied dimensions — what the diagram currently shows.
+  const [appliedN, setAppliedN] = useState(DEFAULT_N);
+  const [appliedC, setAppliedC] = useState<1 | 3>(DEFAULT_C);
   const [appliedH, setAppliedH] = useState(DEFAULT_H);
   const [appliedW, setAppliedW] = useState(DEFAULT_W);
 
   // Draft dimensions — what the user is typing before hitting Apply.
+  const [draftN, setDraftN] = useState(String(DEFAULT_N));
+  const [draftC, setDraftC] = useState<1 | 3>(DEFAULT_C);
   const [draftH, setDraftH] = useState(String(DEFAULT_H));
   const [draftW, setDraftW] = useState(String(DEFAULT_W));
 
@@ -777,8 +783,8 @@ export function ResNet18Diagram() {
   const [sidebarWidth, setSidebarWidth] = useState(0);
 
   const { spec: specList, totalParams } = useMemo(
-    () => buildResNet18Spec(appliedH, appliedW),
-    [appliedH, appliedW],
+    () => buildResNet18Spec(appliedN, appliedC, appliedH, appliedW),
+    [appliedN, appliedC, appliedH, appliedW],
   );
 
   const activeId = hoverId ?? selectedId;
@@ -788,8 +794,14 @@ export function ResNet18Diagram() {
   );
 
   const handleApply = () => {
+    const n = parseInt(draftN, 10);
     const h = parseInt(draftH, 10);
     const w = parseInt(draftW, 10);
+
+    if (Number.isNaN(n) || n < 1) {
+      setError("Batch size must be a positive integer.");
+      return;
+    }
 
     if (Number.isNaN(h) || Number.isNaN(w)) {
       setError("Height and width must be numbers.");
@@ -803,20 +815,29 @@ export function ResNet18Diagram() {
     }
 
     setError(null);
+    setAppliedN(n);
+    setAppliedC(draftC);
     setAppliedH(h);
     setAppliedW(w);
   };
 
   const handleReset = () => {
+    setDraftN(String(DEFAULT_N));
+    setDraftC(DEFAULT_C);
     setDraftH(String(DEFAULT_H));
     setDraftW(String(DEFAULT_W));
     setError(null);
+    setAppliedN(DEFAULT_N);
+    setAppliedC(DEFAULT_C);
     setAppliedH(DEFAULT_H);
     setAppliedW(DEFAULT_W);
   };
 
   const draftsMatchApplied =
-    parseInt(draftH, 10) === appliedH && parseInt(draftW, 10) === appliedW;
+    parseInt(draftN, 10) === appliedN &&
+    draftC === appliedC &&
+    parseInt(draftH, 10) === appliedH &&
+    parseInt(draftW, 10) === appliedW;
 
   return (
     <figure className="my-8">
@@ -826,6 +847,32 @@ export function ResNet18Diagram() {
           <span className="text-[12px] font-semibold tracking-wide text-foreground/55 uppercase">
             Input size
           </span>
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="resnet-n" className="text-[12px] text-foreground/50">N</label>
+            <input
+              id="resnet-n"
+              type="number"
+              min={1}
+              value={draftN}
+              onChange={(e) => { setDraftN(e.target.value); setError(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleApply(); }}
+              className="w-[72px] rounded-md border border-border/60 bg-background px-2 py-1 font-mono text-[13px] text-foreground focus:border-accent focus:outline-none"
+            />
+          </div>
+          <span className="text-foreground/30">&times;</span>
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="resnet-c" className="text-[12px] text-foreground/50">C</label>
+            <select
+              id="resnet-c"
+              value={draftC}
+              onChange={(e) => { setDraftC(Number(e.target.value) as 1 | 3); setError(null); }}
+              className="rounded-md border border-border/60 bg-background px-2 py-1 font-mono text-[13px] text-foreground focus:border-accent focus:outline-none"
+            >
+              <option value={1}>1</option>
+              <option value={3}>3</option>
+            </select>
+          </div>
+          <span className="text-foreground/30">&times;</span>
           <div className="flex items-center gap-1.5">
             <label htmlFor="resnet-h" className="text-[12px] text-foreground/50">H</label>
             <input
@@ -857,7 +904,7 @@ export function ResNet18Diagram() {
           >
             Apply
           </button>
-          {(appliedH !== DEFAULT_H || appliedW !== DEFAULT_W) && (
+          {(appliedN !== DEFAULT_N || appliedC !== DEFAULT_C || appliedH !== DEFAULT_H || appliedW !== DEFAULT_W) && (
             <button
               type="button"
               onClick={handleReset}

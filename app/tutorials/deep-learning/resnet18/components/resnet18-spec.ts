@@ -11,7 +11,7 @@
  * resnet18().parameters())`.
  */
 
-export type Shape = readonly [number, number, number];
+export type Shape = readonly number[];
 
 export interface Sublayer {
   readonly name: string;
@@ -144,6 +144,7 @@ function basicBlockSublayers(
 
 function makeStageHW(
   stage: 1 | 2 | 3 | 4,
+  n: number,
   inC: number,
   outC: number,
   inH: number,
@@ -160,8 +161,8 @@ function makeStageHW(
     label: `layer${stage}.0`,
     stage,
     blockIndex: 0,
-    inShape: [inC, inH, inW],
-    outShape: [outC, outH, outW],
+    inShape: [n, inC, inH, inW],
+    outShape: [n, outC, outH, outW],
     stride: s0Stride,
     downsample: s0Down,
     params: basicBlockParams(inC, outC, s0Down),
@@ -174,8 +175,8 @@ function makeStageHW(
     label: `layer${stage}.1`,
     stage,
     blockIndex: 1,
-    inShape: [outC, outH, outW],
-    outShape: [outC, outH, outW],
+    inShape: [n, outC, outH, outW],
+    outShape: [n, outC, outH, outW],
     stride: 1,
     downsample: false,
     params: basicBlockParams(outC, outC, false),
@@ -234,7 +235,12 @@ export function validateInputSize(inputH: number, inputW: number): string | null
 
 // --- the actual spec (built from user-supplied H × W) ------------------------
 
-export function buildResNet18Spec(inputH: number, inputW: number): {
+export function buildResNet18Spec(
+  batchSize: number,
+  channels: 1 | 3,
+  inputH: number,
+  inputW: number,
+): {
   spec: readonly DiagramNode[];
   totalParams: number;
 } {
@@ -248,14 +254,14 @@ export function buildResNet18Spec(inputH: number, inputW: number): {
     kind: "stem",
     id: "stem",
     label: "Stem",
-    inShape: [3, inputH, inputW],
-    outShape: [64, stemH, stemW],
-    params: conv(3, 64, 7) + bn(64),
+    inShape: [batchSize, channels, inputH, inputW],
+    outShape: [batchSize, 64, stemH, stemW],
+    params: conv(channels, 64, 7) + bn(64),
     sublayers: [
       {
         name: "conv1",
-        py: "nn.Conv2d(\n    3, 64,\n    kernel_size=7,\n    stride=2,\n    padding=3,\n    bias=False\n)",
-        params: conv(3, 64, 7),
+        py: `nn.Conv2d(\n    ${channels}, 64,\n    kernel_size=7,\n    stride=2,\n    padding=3,\n    bias=False\n)`,
+        params: conv(channels, 64, 7),
         note: `aggressive 7×7 kernel — halves spatial resolution to ${afterConv1H}×${afterConv1W}`,
       },
       { name: "bn1", py: "nn.BatchNorm2d(64)", params: bn(64) },
@@ -280,20 +286,20 @@ export function buildResNet18Spec(inputH: number, inputW: number): {
       kind: "input",
       id: "input",
       label: "Input image",
-      outShape: [3, inputH, inputW],
+      outShape: [batchSize, channels, inputH, inputW],
       params: 0,
     },
     stem,
-    ...makeStageHW(1, 64, 64, s1H, s1W, s1H, s1W),
-    ...makeStageHW(2, 64, 128, s1H, s1W, s2H, s2W),
-    ...makeStageHW(3, 128, 256, s2H, s2W, s3H, s3W),
-    ...makeStageHW(4, 256, 512, s3H, s3W, s4H, s4W),
+    ...makeStageHW(1, batchSize, 64, 64, s1H, s1W, s1H, s1W),
+    ...makeStageHW(2, batchSize, 64, 128, s1H, s1W, s2H, s2W),
+    ...makeStageHW(3, batchSize, 128, 256, s2H, s2W, s3H, s3W),
+    ...makeStageHW(4, batchSize, 256, 512, s3H, s3W, s4H, s4W),
     {
       kind: "avgpool",
       id: "avgpool",
       label: "Global Average Pool",
-      inShape: [512, s4H, s4W],
-      outShape: [512, 1, 1],
+      inShape: [batchSize, 512, s4H, s4W],
+      outShape: [batchSize, 512, 1, 1],
       params: 0,
       sublayers: [
         {
@@ -340,7 +346,7 @@ export function buildResNet18Spec(inputH: number, inputW: number): {
 }
 
 /** Default 224×224 spec for convenience. */
-export const RESNET18_SPEC_DEFAULT = buildResNet18Spec(224, 224);
+export const RESNET18_SPEC_DEFAULT = buildResNet18Spec(1, 3, 224, 224);
 export const RESNET18_SPEC = RESNET18_SPEC_DEFAULT.spec;
 export const TOTAL_PARAMS = RESNET18_SPEC_DEFAULT.totalParams;
 
