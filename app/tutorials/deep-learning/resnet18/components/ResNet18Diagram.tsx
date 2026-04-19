@@ -70,10 +70,10 @@ function classifySublayer(sl: Sublayer): SublayerType {
 // Layout
 // ---------------------------------------------------------------------------
 
-const NODE_W = 180;
-const HEADER_H = 44;
-const BAND_H = 56;
-const X_STEP = 380;
+const NODE_W = 72;
+const HEADER_H = 36;
+const BAND_H = 24;
+const X_STEP = 180;
 
 function nodeBoxHeight(spec: DiagramNode): number {
   const count = "sublayers" in spec ? spec.sublayers.length : 0;
@@ -97,8 +97,8 @@ const LAYOUT: Record<string, { row: 0; col: number }> = {
   "bb-4-0": { row: 0, col: 8 },
   "bb-4-1": { row: 0, col: 9 },
   avgpool:  { row: 0, col: 10 },
-  fc:       { row: 0, col: 11 },
-  output:   { row: 0, col: 12 },
+  fc:       { row: 0, col: 12 },
+  output:   { row: 0, col: 14 },
 };
 
 // ---------------------------------------------------------------------------
@@ -115,6 +115,7 @@ type DiagramNodeData = {
   selected: boolean;
   skipSide: "top" | "bottom";
   nodeH: number;
+  labelTop: number;
 };
 
 type LayerGroupData = {
@@ -160,11 +161,13 @@ function NodeShell({
   accent,
   selected,
   height,
+  labelTop,
 }: {
   spec: DiagramNode;
   accent: string;
   selected: boolean;
   height: number;
+  labelTop: number;
 }) {
   const sublayers: readonly Sublayer[] = "sublayers" in spec ? spec.sublayers : [];
   const boxH = height - HEADER_H;
@@ -172,8 +175,10 @@ function NodeShell({
   return (
     <div style={{ position: "relative", width: NODE_W, height }}>
       <span
-        className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[14px] font-bold"
-        style={{ color: accent, top: 0 }}
+        className={`absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold tracking-wide ${
+          spec.kind === "basicblock" ? "text-[16px]" : "text-[36px]"
+        }`}
+        style={{ color: accent, top: labelTop }}
       >
         {spec.label}
       </span>
@@ -191,24 +196,19 @@ function NodeShell({
             {sublayers.map((sl, i) => {
               const slType = classifySublayer(sl);
               const color = SUBLAYER_COLORS[slType];
-              const label = SUBLAYER_LABELS[slType];
               return (
                 <div
                   key={i}
                   className="flex flex-1 items-center justify-center"
                   style={{ background: `${color}22`, borderTop: i > 0 ? `1px solid ${color}30` : undefined }}
                 >
-                  <span className="text-[13px] font-semibold" style={{ color }}>{label}</span>
+                  <span className="sr-only">{SUBLAYER_LABELS[slType]}</span>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="flex flex-1 items-center justify-center" style={{ background: `${accent}0a` }}>
-            <span className="text-center font-mono text-[13px] leading-tight text-foreground/50">
-              {spec.kind === "input" ? formatShape(spec.outShape) : spec.kind === "output" ? `${spec.logits}` : ""}
-            </span>
-          </div>
+          <div className="flex flex-1 items-center justify-center" style={{ background: `${accent}0a` }} />
         )}
       </div>
     </div>
@@ -227,7 +227,7 @@ function StageNodeComp({ data }: NodeProps<StageRFNode>) {
     <>
       <Handle type="target" position={Position.Left} id="main-in" style={mainHandleStyle} />
       <Handle type="source" position={Position.Right} id="main-out" style={mainHandleStyle} />
-      <NodeShell spec={data.spec} accent={data.accent} selected={data.selected} height={data.nodeH} />
+      <NodeShell spec={data.spec} accent={data.accent} selected={data.selected} height={data.nodeH} labelTop={data.labelTop} />
     </>
   );
 }
@@ -252,7 +252,7 @@ function BasicBlockNodeComp({ data }: NodeProps<BasicBlockRFNode>) {
       <Handle type="source" position={Position.Right} id="main-out" style={mainHandleStyle} />
       <Handle type="source" position={Position.Left} id="skip-src" style={skipSrcStyle} />
       <Handle type="target" position={Position.Right} id="skip-dst" style={skipDstStyle} />
-      <NodeShell spec={data.spec} accent={data.accent} selected={data.selected} height={data.nodeH} />
+      <NodeShell spec={data.spec} accent={data.accent} selected={data.selected} height={data.nodeH} labelTop={data.labelTop} />
     </>
   );
 }
@@ -295,41 +295,22 @@ function ResidualEdgeComp({
   data,
   markerEnd,
 }: EdgeProps<ResidualEdge>) {
-  const accent = data?.accent ?? "#94a3b8";
   const downsample = Boolean(data?.downsample);
   const nodeH = data?.nodeH ?? 300;
   const hPad = 30;
   const topY = sourceY - nodeH / 2 - 60;
-  const midX = (sourceX + targetX) / 2;
-  const path = `M ${sourceX},${sourceY} L ${sourceX - hPad},${sourceY} L ${sourceX - hPad},${topY} L ${targetX + hPad},${topY} L ${targetX + hPad},${sourceY} L ${targetX},${targetY}`;
+  const path = `M ${sourceX - hPad},${sourceY} L ${sourceX - hPad},${topY} L ${targetX + hPad},${topY} L ${targetX + hPad},${targetY}`;
   return (
-    <>
-      <BaseEdge
-        id={id}
-        path={path}
-        markerEnd={markerEnd}
-        style={{
-          stroke: accent,
-          strokeWidth: 2,
-          strokeDasharray: downsample ? undefined : "5 5",
-          opacity: 0.85,
-        }}
-      />
-      <text
-        x={midX}
-        y={topY - 12}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        style={{
-          fontSize: 13,
-          fontFamily: "var(--font-mono)",
-          fill: accent,
-          pointerEvents: "none",
-        }}
-      >
-        {downsample ? "1×1 proj" : "identity"}
-      </text>
-    </>
+    <BaseEdge
+      id={id}
+      path={path}
+      markerEnd={markerEnd}
+      style={{
+        stroke: "#94a3b8",
+        strokeWidth: 2,
+        strokeDasharray: downsample ? "6 4" : undefined,
+      }}
+    />
   );
 }
 
@@ -388,12 +369,16 @@ function buildGraph(
     const y = (maxH - totalH) / 2;
     const groupId = blockToGroup.get(spec.id);
 
+    const labelAbsY = -GROUP_PAD_TOP - 50;
+    const labelTop = groupId ? 0 : labelAbsY - y;
+
     const data: DiagramNodeData = {
       spec,
       accent: accentFor(spec),
       selected: selectedId === spec.id,
       skipSide: "top",
       nodeH: totalH,
+      labelTop,
     };
 
     const node = {
@@ -741,6 +726,34 @@ function FlowCanvas({ specList, totalParams, selectedId, onSelect, onHoverChange
           </div>
         </div>
       </Panel>
+      <Panel position="bottom-right">
+        <div className="pointer-events-none rounded-xl border border-border/60 bg-background/95 px-3 py-2.5 shadow-lg backdrop-blur">
+          <div className="text-[10px] font-semibold tracking-wide text-foreground/45 uppercase mb-1.5">
+            Module types
+          </div>
+          <div className="flex flex-col gap-1">
+            {(Object.keys(SUBLAYER_COLORS) as SublayerType[]).map((t) => (
+              <div key={t} className="flex items-center gap-2">
+                <div className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: SUBLAYER_COLORS[t] }} />
+                <span className="text-[11px] text-foreground/70">{SUBLAYER_LABELS[t]}</span>
+              </div>
+            ))}
+          </div>
+          <div className="text-[10px] font-semibold tracking-wide text-foreground/45 uppercase mt-2.5 mb-1.5">
+            Skip connections
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <svg width="20" height="6" className="shrink-0"><line x1="0" y1="3" x2="20" y2="3" stroke="#94a3b8" strokeWidth="2" /></svg>
+              <span className="text-[11px] text-foreground/70">Identity</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <svg width="20" height="6" className="shrink-0"><line x1="0" y1="3" x2="20" y2="3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="6 4" /></svg>
+              <span className="text-[11px] text-foreground/70">1×1 Projection</span>
+            </div>
+          </div>
+        </div>
+      </Panel>
     </ReactFlow>
   );
 }
@@ -759,7 +772,7 @@ export function ResNet18Diagram() {
 
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedId, setSelectedId] = useState<string | null>("bb-2-0");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(0);
 
