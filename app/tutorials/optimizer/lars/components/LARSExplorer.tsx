@@ -269,7 +269,7 @@ export function LARSExplorer() {
 
   return (
     <figure
-      className="my-8 lg:-mx-20 xl:-mx-32"
+      className="my-8"
       role="figure"
       aria-label="LARS interactive learning rate explorer"
     >

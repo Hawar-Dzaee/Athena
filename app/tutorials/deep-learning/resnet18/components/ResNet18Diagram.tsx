@@ -665,7 +665,7 @@ export function ResNet18Diagram() {
 
   const [selectedId, setSelectedId] = useState<string | null>("bb-2-0");
   const [hoverId, setHoverId] = useState<string | null>(null);
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
+  const [sidebarWidth, setSidebarWidth] = useState(0);
 
   const { spec: specList, totalParams } = useMemo(
     () => buildResNet18Spec(appliedH, appliedW),

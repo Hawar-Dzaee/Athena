@@ -339,7 +339,7 @@ export function VICRegExplorer() {
   const gridLines = [-3, -2, -1, 0, 1, 2, 3];
 
   return (
-    <figure className="my-8 lg:-mx-20 xl:-mx-32" role="figure" aria-label="VICReg interactive embedding explorer">
+    <figure className="my-8" role="figure" aria-label="VICReg interactive embedding explorer">
       {/* Term toggles */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <TermToggle
