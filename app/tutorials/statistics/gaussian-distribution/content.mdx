@@ -1,0 +1,35 @@
+import { GaussianPlot } from "./components/GaussianPlot";
+
+# Gaussian Distribution
+
+The **Gaussian** (or **normal**) distribution is the most important distribution in
+statistics. It shows up everywhere: measurement errors, heights of people, pixel
+noise, gradient updates in neural networks.
+
+## The equation
+
+A continuous random variable $X$ follows a Gaussian distribution $X \sim \mathcal{N}(\mu, \sigma^2)$
+if its **probability density function** (PDF) is:
+
+$$
+f(x) = \frac{1}{\sigma\sqrt{2\pi}} \, \exp\!\left(-\frac{(x - \mu)^2}{2\sigma^2}\right)
+$$
+
+Two parameters control everything:
+
+- **$\mu$ (mu)** — the **mean**, the center of the bell curve. Shifting $\mu$
+  slides the entire curve left or right without changing its shape.
+- **$\sigma$ (sigma)** — the **standard deviation**, a measure of spread. A
+  small $\sigma$ gives a tall, narrow peak; a large $\sigma$ gives a short, wide
+  one. The total area under the curve is always $1$.
+
+## Interactive plot
+
+Drag the sliders to change $\mu$ and $\sigma$ and watch the bell curve reshape in
+real time. The shaded bands show how probability concentrates around the mean:
+
+- **±1σ** contains ≈ **68.27%** of the total probability
+- **±2σ** contains ≈ **95.45%**
+- **±3σ** contains ≈ **99.73%**
+
+<GaussianPlot />

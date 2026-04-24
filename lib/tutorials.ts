@@ -129,6 +129,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 8,
   },
   {
+    slug: "gaussian-distribution",
+    topic: "statistics",
+    title: "Gaussian Distribution",
+    blurb:
+      "The bell curve explained — its equation, its parameters, and an interactive plot you can reshape by dragging μ and σ.",
+    status: "ready",
+    minutes: 5,
+  },
+  {
     slug: "warmup-cosine-scheduler",
     topic: "deep-learning",
     title: "Warmup Cosine Scheduler",
