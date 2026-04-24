@@ -129,6 +129,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 8,
   },
   {
+    slug: "vicreg-losses",
+    topic: "regularization",
+    title: "VICReg Loss Functions — Anatomy",
+    blurb:
+      "Break down HingeStdLoss, CovarianceLoss, and VICRegLoss with the exact code from eb_jepa — each with an interactive drag-to-explore demo.",
+    status: "ready",
+    minutes: 10,
+  },
+  {
     slug: "gaussian-distribution",
     topic: "statistics",
     title: "Gaussian Distribution",
