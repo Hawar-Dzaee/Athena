@@ -155,6 +155,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 7,
   },
+  {
+    slug: "covariance",
+    topic: "statistics",
+    title: "Covariance",
+    blurb:
+      "How two variables move together — the formula, the quadrant trick, and a drag-to-explore scatter plot.",
+    status: "ready",
+    minutes: 6,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {

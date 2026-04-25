@@ -1,0 +1,69 @@
+import { CovariancePlot } from "./components/CovariancePlot";
+import { QuadrantDiagram } from "./components/QuadrantDiagram";
+
+# Covariance
+
+If you know the mean and variance of a single variable, the next question is: **how
+do two variables relate?** Do they rise and fall together, or does one go up when the
+other goes down? That's what covariance measures.
+
+## The formula
+
+Given $n$ paired observations $(x_1, y_1), (x_2, y_2), \ldots, (x_n, y_n)$, the
+**sample covariance** is:
+
+$$
+\text{Cov}(X, Y) = \frac{1}{n - 1} \sum_{i=1}^{n} (x_i - \bar{x})(y_i - \bar{y})
+$$
+
+where $\bar{x}$ and $\bar{y}$ are the sample means. The denominator uses $n - 1$
+(Bessel's correction) for the same reason sample variance does — it gives an unbiased
+estimate.
+
+## The quadrant trick
+
+The formula is just a sum of products. To see *why* it works, put the mean
+$(\bar{x}, \bar{y})$ at the center of a scatter plot. It splits the plane into four
+quadrants:
+
+<QuadrantDiagram />
+
+When most points live in quadrants **I and III** (both deviations same sign), the
+products are positive and covariance is **positive** — the variables move together.
+When most points live in quadrants **II and IV**, the products are negative and
+covariance is **negative** — they move in opposite directions.
+
+Each point's contribution can also be visualized as a **rectangle** stretching from
+the point to the mean. The rectangle's area equals $|(x_i - \bar{x})(y_i - \bar{y})|$
+— its sign is determined by which quadrant the point falls in.
+
+## Interactive plot
+
+Drag points to reshape the cloud and watch covariance update in real time. The
+coloured rectangles show each point's contribution — green for positive, red for
+negative. Click empty space to add a point, double-click a point to remove it.
+
+<CovariancePlot />
+
+## Key properties
+
+- **Symmetric:** $\text{Cov}(X, Y) = \text{Cov}(Y, X)$.
+- **Self-covariance is variance:** $\text{Cov}(X, X) = \text{Var}(X)$.
+- **Scale-dependent:** covariance has units of $X \times Y$, so its raw number is
+  hard to interpret across different scales.
+- **Linear operations:**
+  $\text{Cov}(aX + b,\; cY + d) = ac \cdot \text{Cov}(X, Y)$.
+
+## From covariance to correlation
+
+Because covariance depends on the scale of the variables, we often **normalise** it
+to get the **Pearson correlation coefficient**:
+
+$$
+\rho_{XY} = \frac{\text{Cov}(X, Y)}{\sigma_X \, \sigma_Y}
+$$
+
+This rescales covariance into the range $[-1, 1]$, where $+1$ is perfect positive
+linear relationship, $-1$ is perfect negative, and $0$ is no linear relationship.
+Covariance tells you the **direction**; correlation tells you the direction *and*
+**strength**.
