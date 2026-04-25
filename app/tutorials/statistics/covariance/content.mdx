@@ -1,5 +1,6 @@
 import { CovariancePlot } from "./components/CovariancePlot";
 import { QuadrantDiagram } from "./components/QuadrantDiagram";
+import { WhyMeanCenter } from "./components/WhyMeanCenter";
 
 # Covariance
 
@@ -36,6 +37,28 @@ covariance is **negative** — they move in opposite directions.
 Each point's contribution can also be visualized as a **rectangle** stretching from
 the point to the mean. The rectangle's area equals $|(x_i - \bar{x})(y_i - \bar{y})|$
 — its sign is determined by which quadrant the point falls in.
+
+## Why do we need the mean of the variables?
+
+Look at the covariance formula again — it subtracts $\bar{x}$ and $\bar{y}$ before
+multiplying. Why not just multiply the raw values $x_i \cdot y_i$?
+
+Here are five points that sit perfectly on the line $y = x + 6$. They are **perfectly
+positively correlated** — as $x$ goes up, $y$ goes up by exactly the same amount.
+But every point lives in **quadrant II** of the standard coordinate system, where
+$x < 0$ and $y > 0$.
+
+<WhyMeanCenter />
+
+Without mean-centering, every product $x_i \cdot y_i$ is negative (negative times
+positive), so the naive sum screams "negative relationship." That's wrong — the
+variables clearly move together.
+
+Subtracting the means **recenters the coordinate system on the data's own center of
+mass** $(\bar{x}, \bar{y})$. Relative to that center, the deviations fall into the
+correct quadrants, and the products correctly come out positive. Mean-centering is
+what makes covariance measure the *relationship between variables* rather than an
+artifact of where the data happens to sit in the coordinate plane.
 
 ## Interactive plot
 
