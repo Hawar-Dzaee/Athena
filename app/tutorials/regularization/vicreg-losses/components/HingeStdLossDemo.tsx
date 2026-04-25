@@ -8,15 +8,17 @@ interface Point {
   y: number;
 }
 
-const N = 10;
 const W = 460;
 const H = 400;
 const M = 44;
 const DOMAIN: [number, number] = [-3.5, 3.5];
+const BATCH_MIN = 2;
+const BATCH_MAX = 16;
 
 const COLORS = [
-  "#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#8b5cf6",
-  "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6",
+  "#e6194b", "#3cb44b", "#4363d8", "#f58231", "#42d4f4",
+  "#f032e6", "#fabed4", "#469990", "#dcbeff", "#9a6324",
+  "#fffac8", "#800000", "#aaffc3", "#000075", "#a9a9a9", "#ffe119",
 ];
 
 function mulberry32(seed: number) {
@@ -29,22 +31,23 @@ function mulberry32(seed: number) {
   };
 }
 
-function makePoints(seed: number, spread: number): Point[] {
+function makePoints(seed: number, spread: number, n: number): Point[] {
   const rng = mulberry32(seed);
-  return Array.from({ length: N }, () => ({
+  return Array.from({ length: n }, () => ({
     x: (rng() - 0.5) * spread,
     y: (rng() - 0.5) * spread,
   }));
 }
 
 function computeHingeStats(points: Point[], stdMargin: number) {
+  const n = points.length;
   const xs = points.map((p) => p.x);
   const ys = points.map((p) => p.y);
   const meanX = d3.mean(xs)!;
   const meanY = d3.mean(ys)!;
 
-  const varX = xs.reduce((s, v) => s + (v - meanX) ** 2, 0) / (N - 1);
-  const varY = ys.reduce((s, v) => s + (v - meanY) ** 2, 0) / (N - 1);
+  const varX = xs.reduce((s, v) => s + (v - meanX) ** 2, 0) / (n - 1);
+  const varY = ys.reduce((s, v) => s + (v - meanY) ** 2, 0) / (n - 1);
 
   const stdX = Math.sqrt(varX + 0.0001);
   const stdY = Math.sqrt(varY + 0.0001);
@@ -56,9 +59,64 @@ function computeHingeStats(points: Point[], stdMargin: number) {
   return { meanX, meanY, stdX, stdY, hingeX, hingeY, loss };
 }
 
+const SAMPLE_SIZES = Array.from({ length: 63 }, (_, i) => i + 2);
+const DIM_SIZES = Array.from({ length: 64 }, (_, i) => i + 1);
+const N_TICKS = [2, 16, 32, 64];
+const D_TICKS = [1, 16, 32, 64];
+const HM_CELL = 8;
+const HM_LM = 36;
+const HM_TM = 26;
+const HM_BM = 30;
+const HM_RM = 6;
+const HM_W = HM_LM + DIM_SIZES.length * HM_CELL + HM_RM;
+const HM_H = HM_TM + SAMPLE_SIZES.length * HM_CELL + HM_BM;
+
+function gaussianSample(rng: () => number): number {
+  let u: number, v: number, s: number;
+  do {
+    u = rng() * 2 - 1;
+    v = rng() * 2 - 1;
+    s = u * u + v * v;
+  } while (s >= 1 || s === 0);
+  return u * Math.sqrt((-2 * Math.log(s)) / s);
+}
+
+function computeHingeStdLossND(
+  n: number,
+  d: number,
+  spread: number,
+  margin: number,
+  seed: number,
+): number {
+  const rng = mulberry32(seed);
+  const k = n - 1;
+  let totalHinge = 0;
+  for (let j = 0; j < d; j++) {
+    let chi2: number;
+    if (k <= 6) {
+      chi2 = 0;
+      for (let i = 0; i < k; i++) {
+        const z = gaussianSample(rng);
+        chi2 += z * z;
+      }
+    } else {
+      const z = gaussianSample(rng);
+      const a = 1 - 2 / (9 * k);
+      const b = Math.sqrt(2 / (9 * k));
+      const cube = a + b * z;
+      chi2 = k * Math.max(0, cube * cube * cube);
+    }
+    const std = Math.sqrt((chi2 * spread * spread) / k + 0.0001);
+    totalHinge += Math.max(0, margin - std);
+  }
+  return totalHinge / d;
+}
+
 export function HingeStdLossDemo() {
-  const [points, setPoints] = useState<Point[]>(() => makePoints(42, 4));
+  const [batchSize, setBatchSize] = useState(10);
+  const [points, setPoints] = useState<Point[]>(() => makePoints(42, 4, 10));
   const [stdMargin, setStdMargin] = useState(1.0);
+  const [showData, setShowData] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -174,7 +232,7 @@ export function HingeStdLossDemo() {
                 cx={xScale(p.x)}
                 cy={yScale(p.y)}
                 r={8}
-                fill={COLORS[i]}
+                fill={COLORS[i % COLORS.length]}
                 stroke="white"
                 strokeWidth={1.5}
                 opacity={0.9}
@@ -269,15 +327,37 @@ export function HingeStdLossDemo() {
             </label>
           </div>
 
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-background)] p-4">
+            <label className="flex flex-col gap-1">
+              <div className="flex justify-between text-xs text-[var(--color-muted-foreground)]">
+                <span className="font-semibold uppercase tracking-wider">
+                  Batch size (N)
+                </span>
+                <span className="font-mono">{batchSize}</span>
+              </div>
+              <input
+                type="range" min={BATCH_MIN} max={BATCH_MAX} step={1}
+                value={batchSize}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value);
+                  setBatchSize(n);
+                  setPoints(makePoints(42, 4, n));
+                }}
+                className="w-full accent-violet-500"
+                aria-label="Batch size"
+              />
+            </label>
+          </div>
+
           <div className="flex gap-2">
             <button
-              onClick={() => setPoints(makePoints(42, 4))}
+              onClick={() => setPoints(makePoints(42, 4, batchSize))}
               className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-xs text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-border)]"
             >
               Well-spread
             </button>
             <button
-              onClick={() => setPoints(makePoints(99, 0.15))}
+              onClick={() => setPoints(makePoints(99, 0.15, batchSize))}
               className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-xs text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-border)]"
             >
               Collapsed
@@ -286,7 +366,7 @@ export function HingeStdLossDemo() {
               onClick={() => {
                 const rng = mulberry32(77);
                 setPoints(
-                  Array.from({ length: N }, () => ({
+                  Array.from({ length: batchSize }, () => ({
                     x: (rng() - 0.5) * 0.1,
                     y: (rng() - 0.5) * 4,
                   })),
@@ -294,11 +374,268 @@ export function HingeStdLossDemo() {
               }}
               className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-xs text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-border)]"
             >
-              Dim 0 only
+              Collapse dim 0
+            </button>
+            <button
+              onClick={() => {
+                const rng = mulberry32(77);
+                setPoints(
+                  Array.from({ length: batchSize }, () => ({
+                    x: (rng() - 0.5) * 4,
+                    y: (rng() - 0.5) * 0.1,
+                  })),
+                );
+              }}
+              className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-xs text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-border)]"
+            >
+              Collapse dim 1
             </button>
           </div>
+
+          <button
+            onClick={() => setShowData((v) => !v)}
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-xs text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-border)]"
+          >
+            {showData ? "Hide" : "Show"} data ({batchSize}, 2)
+          </button>
+
+          {showData && (
+            <div className="max-h-64 overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-background)] p-3">
+              <table className="w-full text-xs" role="table" aria-label="Batch data matrix">
+                <thead>
+                  <tr className="text-[var(--color-muted-foreground)]">
+                    <th className="pb-1 pr-2 text-left font-semibold">#</th>
+                    <th className="pb-1 pr-2 text-right font-semibold">dim 0</th>
+                    <th className="pb-1 text-right font-semibold">dim 1</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {points.map((p, i) => (
+                    <tr key={i}>
+                      <td className="pr-2 py-0.5">
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full mr-1"
+                          style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                        />
+                        <span className="text-[var(--color-muted-foreground)]">{i}</span>
+                      </td>
+                      <td className="pr-2 py-0.5 text-right font-mono">{p.x.toFixed(3)}</td>
+                      <td className="py-0.5 text-right font-mono">{p.y.toFixed(3)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
+    </figure>
+  );
+}
+
+export function HingeStdHeatmap() {
+  const [margin, setMargin] = useState(1.0);
+  const [spread, setSpread] = useState(1.0);
+  const [seed, setSeed] = useState(42);
+
+  const { grid, maxLoss } = useMemo(() => {
+    const rows = SAMPLE_SIZES.length;
+    const cols = DIM_SIZES.length;
+    const flat = new Float32Array(rows * cols);
+    let max = 0;
+    for (let ri = 0; ri < rows; ri++) {
+      for (let ci = 0; ci < cols; ci++) {
+        const s = seed * 997 + ri * 131 + ci * 17;
+        const v = computeHingeStdLossND(SAMPLE_SIZES[ri], DIM_SIZES[ci], spread, margin, s);
+        flat[ri * cols + ci] = v;
+        if (v > max) max = v;
+      }
+    }
+    return { grid: flat, maxLoss: Math.max(max, 0.01) };
+  }, [margin, spread, seed]);
+
+  const colorScale = useMemo(() => {
+    const interp = d3.interpolateRgbBasis(["#10b981", "#eab308", "#ef4444"]);
+    return (v: number) => interp(Math.min(v / maxLoss, 1));
+  }, [maxLoss]);
+
+  const legendStops = useMemo(() =>
+    Array.from({ length: 7 }, (_, i) => ({
+      offset: `${(i / 6) * 100}%`,
+      color: colorScale((i / 6) * maxLoss),
+    })),
+  [colorScale, maxLoss]);
+
+  const gridW = DIM_SIZES.length * HM_CELL;
+  const gridH = SAMPLE_SIZES.length * HM_CELL;
+
+  const cells = useMemo(() => {
+    const rects: React.ReactNode[] = [];
+    const rows = SAMPLE_SIZES.length;
+    const cols = DIM_SIZES.length;
+    for (let ri = 0; ri < rows; ri++) {
+      for (let ci = 0; ci < cols; ci++) {
+        rects.push(
+          <rect
+            key={ri * cols + ci}
+            x={HM_LM + ci * HM_CELL}
+            y={HM_TM + ri * HM_CELL}
+            width={HM_CELL}
+            height={HM_CELL}
+            fill={colorScale(grid[ri * cols + ci])}
+          />,
+        );
+      }
+    }
+    return rects;
+  }, [grid, colorScale]);
+
+  return (
+    <figure
+      className="my-8"
+      role="figure"
+      aria-label="HingeStdLoss heatmap across batch sizes and projection dimensions"
+    >
+      <div className="mb-3 flex flex-wrap items-end gap-4">
+        <label className="flex flex-col gap-1">
+          <div className="flex justify-between text-xs text-[var(--color-muted-foreground)]">
+            <span className="font-semibold uppercase tracking-wider">Margin (γ)</span>
+            <span className="ml-3 font-mono">{margin.toFixed(1)}</span>
+          </div>
+          <input
+            type="range" min={0.1} max={2.5} step={0.1}
+            value={margin}
+            onChange={(e) => setMargin(parseFloat(e.target.value))}
+            className="w-36 accent-violet-500"
+            aria-label="Hinge margin"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <div className="flex justify-between text-xs text-[var(--color-muted-foreground)]">
+            <span className="font-semibold uppercase tracking-wider">Spread (σ)</span>
+            <span className="ml-3 font-mono">{spread.toFixed(1)}</span>
+          </div>
+          <input
+            type="range" min={0.1} max={3.0} step={0.1}
+            value={spread}
+            onChange={(e) => setSpread(parseFloat(e.target.value))}
+            className="w-36 accent-violet-500"
+            aria-label="Data spread"
+          />
+        </label>
+        <button
+          onClick={() => setSeed((s) => s + 1)}
+          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-1.5 text-xs text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-border)]"
+        >
+          Re-roll
+        </button>
+      </div>
+
+      <svg
+        viewBox={`0 0 ${HM_W} ${HM_H}`}
+        width={HM_W}
+        height={HM_H}
+        role="img"
+        aria-label="Heatmap of HingeStdLoss values"
+      >
+        <defs>
+          <linearGradient id="hinge-hm-grad" x1="0" x2="1" y1="0" y2="0">
+            {legendStops.map((s, i) => (
+              <stop key={i} offset={s.offset} stopColor={s.color} />
+            ))}
+          </linearGradient>
+        </defs>
+
+        {/* Y-axis label */}
+        <text
+          x={8}
+          y={HM_TM + gridH / 2}
+          fontSize="9"
+          fill="var(--color-muted-foreground)"
+          textAnchor="middle"
+          transform={`rotate(-90, 8, ${HM_TM + gridH / 2})`}
+        >
+          N (batch)
+        </text>
+
+        {/* X-axis label */}
+        <text
+          x={HM_LM + gridW / 2}
+          y={10}
+          fontSize="9"
+          fill="var(--color-muted-foreground)"
+          textAnchor="middle"
+        >
+          D (projection)
+        </text>
+
+        {/* Column tick labels */}
+        {D_TICKS.map((d) => {
+          const ci = d - 1;
+          return (
+            <text
+              key={d}
+              x={HM_LM + ci * HM_CELL + HM_CELL / 2}
+              y={HM_TM - 4}
+              fontSize="8"
+              fill="var(--color-muted-foreground)"
+              textAnchor="middle"
+              fontFamily="monospace"
+            >
+              {d}
+            </text>
+          );
+        })}
+
+        {/* Row tick labels */}
+        {N_TICKS.map((n) => {
+          const ri = n - 2;
+          return (
+            <text
+              key={n}
+              x={HM_LM - 4}
+              y={HM_TM + ri * HM_CELL + HM_CELL / 2 + 3}
+              fontSize="8"
+              fill="var(--color-muted-foreground)"
+              textAnchor="end"
+              fontFamily="monospace"
+            >
+              {n}
+            </text>
+          );
+        })}
+
+        {cells}
+
+        {/* Legend bar */}
+        <rect
+          x={HM_LM}
+          y={HM_TM + gridH + 8}
+          width={gridW}
+          height={6}
+          rx={3}
+          fill="url(#hinge-hm-grad)"
+        />
+        <text
+          x={HM_LM}
+          y={HM_TM + gridH + 24}
+          fontSize="8"
+          fill="var(--color-muted-foreground)"
+          fontFamily="monospace"
+        >
+          0
+        </text>
+        <text
+          x={HM_LM + gridW}
+          y={HM_TM + gridH + 24}
+          fontSize="8"
+          fill="var(--color-muted-foreground)"
+          fontFamily="monospace"
+          textAnchor="end"
+        >
+          {maxLoss.toFixed(2)}
+        </text>
+      </svg>
     </figure>
   );
 }

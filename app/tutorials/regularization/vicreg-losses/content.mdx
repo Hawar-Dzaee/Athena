@@ -1,4 +1,4 @@
-import { HingeStdLossDemo } from "./components/HingeStdLossDemo";
+import { HingeStdLossDemo, HingeStdHeatmap } from "./components/HingeStdLossDemo";
 import { CovarianceLossDemo } from "./components/CovarianceLossDemo";
 import { VICRegLossDemo } from "./components/VICRegLossDemo";
 
@@ -48,6 +48,13 @@ Use the margin slider to change $\gamma$. Click **Dim 0 only** to see what
 happens when just one dimension collapses while the other stays spread.
 
 <HingeStdLossDemo />
+
+**Heatmap view:** how does the loss behave as batch size $N$ and projection
+dimensionality $D$ scale? Each cell draws $N$ samples from $\mathcal{N}(0, \sigma)$
+across $D$ dimensions and computes the average hinge penalty. Small $N$ makes the
+sample std unreliable — the loss stays high even when the true spread exceeds $\gamma$.
+
+<HingeStdHeatmap />
 
 ---
 
