@@ -59,17 +59,6 @@ function computeHingeStats(points: Point[], stdMargin: number) {
   return { meanX, meanY, stdX, stdY, hingeX, hingeY, loss };
 }
 
-const SAMPLE_SIZES = Array.from({ length: 63 }, (_, i) => i + 2);
-const DIM_SIZES = Array.from({ length: 64 }, (_, i) => i + 1);
-const N_TICKS = [2, 16, 32, 64];
-const D_TICKS = [1, 16, 32, 64];
-const HM_CELL = 8;
-const HM_LM = 36;
-const HM_TM = 26;
-const HM_BM = 30;
-const HM_RM = 6;
-const HM_W = HM_LM + DIM_SIZES.length * HM_CELL + HM_RM;
-const HM_H = HM_TM + SAMPLE_SIZES.length * HM_CELL + HM_BM;
 
 function gaussianSample(rng: () => number): number {
   let u: number, v: number, s: number;
@@ -81,36 +70,6 @@ function gaussianSample(rng: () => number): number {
   return u * Math.sqrt((-2 * Math.log(s)) / s);
 }
 
-function computeHingeStdLossND(
-  n: number,
-  d: number,
-  spread: number,
-  margin: number,
-  seed: number,
-): number {
-  const rng = mulberry32(seed);
-  const k = n - 1;
-  let totalHinge = 0;
-  for (let j = 0; j < d; j++) {
-    let chi2: number;
-    if (k <= 6) {
-      chi2 = 0;
-      for (let i = 0; i < k; i++) {
-        const z = gaussianSample(rng);
-        chi2 += z * z;
-      }
-    } else {
-      const z = gaussianSample(rng);
-      const a = 1 - 2 / (9 * k);
-      const b = Math.sqrt(2 / (9 * k));
-      const cube = a + b * z;
-      chi2 = k * Math.max(0, cube * cube * cube);
-    }
-    const std = Math.sqrt((chi2 * spread * spread) / k + 0.0001);
-    totalHinge += Math.max(0, margin - std);
-  }
-  return totalHinge / d;
-}
 
 export function HingeStdLossDemo() {
   const [batchSize, setBatchSize] = useState(10);
@@ -434,80 +393,150 @@ export function HingeStdLossDemo() {
 }
 
 export function HingeStdHeatmap() {
-  const [margin, setMargin] = useState(1.0);
+  const [n, setN] = useState(16);
+  const [d, setD] = useState(16);
   const [spread, setSpread] = useState(1.0);
   const [seed, setSeed] = useState(42);
 
-  const { grid, maxLoss } = useMemo(() => {
-    const rows = SAMPLE_SIZES.length;
-    const cols = DIM_SIZES.length;
-    const flat = new Float32Array(rows * cols);
-    let max = 0;
-    for (let ri = 0; ri < rows; ri++) {
-      for (let ci = 0; ci < cols; ci++) {
-        const s = seed * 997 + ri * 131 + ci * 17;
-        const v = computeHingeStdLossND(SAMPLE_SIZES[ri], DIM_SIZES[ci], spread, margin, s);
-        flat[ri * cols + ci] = v;
-        if (v > max) max = v;
+  const { data, absMax, stds, maxStd } = useMemo(() => {
+    const rng = mulberry32(seed);
+    const flat = new Float32Array(n * d);
+    let mx = 0;
+    for (let ri = 0; ri < n; ri++) {
+      for (let ci = 0; ci < d; ci++) {
+        const val = gaussianSample(rng) * spread;
+        flat[ri * d + ci] = val;
+        const a = Math.abs(val);
+        if (a > mx) mx = a;
       }
     }
-    return { grid: flat, maxLoss: Math.max(max, 0.01) };
-  }, [margin, spread, seed]);
+    const colStds = new Float32Array(d);
+    let ms = 0;
+    for (let ci = 0; ci < d; ci++) {
+      let sum = 0;
+      for (let ri = 0; ri < n; ri++) sum += flat[ri * d + ci];
+      const mean = sum / n;
+      let varSum = 0;
+      for (let ri = 0; ri < n; ri++) {
+        const diff = flat[ri * d + ci] - mean;
+        varSum += diff * diff;
+      }
+      const std = Math.sqrt(varSum / (n - 1) + 0.0001);
+      colStds[ci] = std;
+      if (std > ms) ms = std;
+    }
+    return { data: flat, absMax: Math.max(mx, 0.01), stds: colStds, maxStd: Math.max(ms, 0.01) };
+  }, [n, d, spread, seed]);
 
   const colorScale = useMemo(() => {
-    const interp = d3.interpolateRgbBasis(["#10b981", "#eab308", "#ef4444"]);
-    return (v: number) => interp(Math.min(v / maxLoss, 1));
-  }, [maxLoss]);
+    const interp = d3.interpolateRgbBasis(["#3b82f6", "#1e1e2e", "#ef4444"]);
+    return (v: number) => interp((v / absMax + 1) / 2);
+  }, [absMax]);
 
-  const legendStops = useMemo(() =>
-    Array.from({ length: 7 }, (_, i) => ({
-      offset: `${(i / 6) * 100}%`,
-      color: colorScale((i / 6) * maxLoss),
-    })),
-  [colorScale, maxLoss]);
+  const stdColorScale = useMemo(() => {
+    const interp = d3.interpolateRgbBasis(["#312e81", "#8b5cf6", "#10b981"]);
+    return (v: number) => interp(Math.min(v / maxStd, 1));
+  }, [maxStd]);
 
-  const gridW = DIM_SIZES.length * HM_CELL;
-  const gridH = SAMPLE_SIZES.length * HM_CELL;
+  const cellSize = Math.max(12, Math.min(36, Math.floor(1200 / Math.max(n, d))));
+  const lm = 48;
+  const tm = 36;
+  const rm = 70;
+  const gridW = d * cellSize;
+  const gridH = n * cellSize;
+  const valBarX = lm + gridW + 16;
+  const valBarW = 10;
+  const svgW = valBarX + valBarW + 40;
+  const svgH = tm + gridH + 16;
+
+  const stdTm = 14;
+  const stdBm = 22;
+  const stdRowH = cellSize;
+  const stdBarH = 80;
+  const stdSvgH = stdTm + Math.max(stdRowH, stdBarH) + stdBm;
+  const stdValBarX = valBarX;
+  const stdSvgW = svgW;
+
+  const nTicks = useMemo(() => {
+    const ticks: number[] = [0];
+    const step = Math.max(1, Math.floor(n / 4));
+    for (let i = step; i < n; i += step) ticks.push(i);
+    if (ticks[ticks.length - 1] !== n - 1) ticks.push(n - 1);
+    return ticks;
+  }, [n]);
+
+  const dTicks = useMemo(() => {
+    const ticks: number[] = [0];
+    const step = Math.max(1, Math.floor(d / 4));
+    for (let i = step; i < d; i += step) ticks.push(i);
+    if (ticks[ticks.length - 1] !== d - 1) ticks.push(d - 1);
+    return ticks;
+  }, [d]);
 
   const cells = useMemo(() => {
     const rects: React.ReactNode[] = [];
-    const rows = SAMPLE_SIZES.length;
-    const cols = DIM_SIZES.length;
-    for (let ri = 0; ri < rows; ri++) {
-      for (let ci = 0; ci < cols; ci++) {
+    for (let ri = 0; ri < n; ri++) {
+      for (let ci = 0; ci < d; ci++) {
         rects.push(
           <rect
-            key={ri * cols + ci}
-            x={HM_LM + ci * HM_CELL}
-            y={HM_TM + ri * HM_CELL}
-            width={HM_CELL}
-            height={HM_CELL}
-            fill={colorScale(grid[ri * cols + ci])}
+            key={ri * d + ci}
+            x={lm + ci * cellSize}
+            y={tm + ri * cellSize}
+            width={cellSize}
+            height={cellSize}
+            fill={colorScale(data[ri * d + ci])}
           />,
         );
       }
     }
     return rects;
-  }, [grid, colorScale]);
+  }, [data, colorScale, n, d, cellSize]);
+
+  const legendStops = useMemo(() =>
+    Array.from({ length: 7 }, (_, i) => ({
+      offset: `${(i / 6) * 100}%`,
+      color: colorScale(-absMax + (i / 6) * 2 * absMax),
+    })),
+  [colorScale, absMax]);
+
+  const stdLegendStops = useMemo(() =>
+    Array.from({ length: 7 }, (_, i) => ({
+      offset: `${(i / 6) * 100}%`,
+      color: stdColorScale((i / 6) * maxStd),
+    })),
+  [stdColorScale, maxStd]);
 
   return (
     <figure
       className="my-8"
       role="figure"
-      aria-label="HingeStdLoss heatmap across batch sizes and projection dimensions"
+      aria-label="Input data heatmap (N × D)"
     >
       <div className="mb-3 flex flex-wrap items-end gap-4">
         <label className="flex flex-col gap-1">
           <div className="flex justify-between text-xs text-[var(--color-muted-foreground)]">
-            <span className="font-semibold uppercase tracking-wider">Margin (γ)</span>
-            <span className="ml-3 font-mono">{margin.toFixed(1)}</span>
+            <span className="font-semibold uppercase tracking-wider">Batch (N)</span>
+            <span className="ml-3 font-mono">{n}</span>
           </div>
           <input
-            type="range" min={0.1} max={2.5} step={0.1}
-            value={margin}
-            onChange={(e) => setMargin(parseFloat(e.target.value))}
+            type="range" min={2} max={16} step={1}
+            value={n}
+            onChange={(e) => setN(parseInt(e.target.value))}
             className="w-36 accent-violet-500"
-            aria-label="Hinge margin"
+            aria-label="Batch size"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <div className="flex justify-between text-xs text-[var(--color-muted-foreground)]">
+            <span className="font-semibold uppercase tracking-wider">Dims (D)</span>
+            <span className="ml-3 font-mono">{d}</span>
+          </div>
+          <input
+            type="range" min={1} max={16} step={1}
+            value={d}
+            onChange={(e) => setD(parseInt(e.target.value))}
+            className="w-36 accent-violet-500"
+            aria-label="Projection dimensions"
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -532,108 +561,196 @@ export function HingeStdHeatmap() {
       </div>
 
       <svg
-        viewBox={`0 0 ${HM_W} ${HM_H}`}
-        width={HM_W}
-        height={HM_H}
+        viewBox={`0 0 ${svgW} ${svgH}`}
+        width={svgW}
+        height={svgH}
         role="img"
-        aria-label="Heatmap of HingeStdLoss values"
+        aria-label="Heatmap of input data values"
       >
         <defs>
-          <linearGradient id="hinge-hm-grad" x1="0" x2="1" y1="0" y2="0">
+          <linearGradient id="input-hm-grad" x1="0" x2="0" y1="1" y2="0">
             {legendStops.map((s, i) => (
               <stop key={i} offset={s.offset} stopColor={s.color} />
             ))}
           </linearGradient>
         </defs>
 
-        {/* Y-axis label */}
         <text
-          x={8}
-          y={HM_TM + gridH / 2}
-          fontSize="9"
-          fill="var(--color-muted-foreground)"
+          x={14}
+          y={tm + gridH / 2}
+          fontSize="13"
+          fontWeight="600"
+          fill="#d4d4d8"
           textAnchor="middle"
-          transform={`rotate(-90, 8, ${HM_TM + gridH / 2})`}
+          transform={`rotate(-90, 14, ${tm + gridH / 2})`}
         >
-          N (batch)
+          N (samples)
         </text>
 
-        {/* X-axis label */}
         <text
-          x={HM_LM + gridW / 2}
-          y={10}
-          fontSize="9"
-          fill="var(--color-muted-foreground)"
+          x={lm + gridW / 2}
+          y={14}
+          fontSize="13"
+          fontWeight="600"
+          fill="#d4d4d8"
           textAnchor="middle"
         >
-          D (projection)
+          D (dimensions)
         </text>
 
-        {/* Column tick labels */}
-        {D_TICKS.map((d) => {
-          const ci = d - 1;
-          return (
-            <text
-              key={d}
-              x={HM_LM + ci * HM_CELL + HM_CELL / 2}
-              y={HM_TM - 4}
-              fontSize="8"
-              fill="var(--color-muted-foreground)"
-              textAnchor="middle"
-              fontFamily="monospace"
-            >
-              {d}
-            </text>
-          );
-        })}
+        {dTicks.map((ci) => (
+          <text
+            key={ci}
+            x={lm + ci * cellSize + cellSize / 2}
+            y={tm - 6}
+            fontSize="11"
+            fill="#a1a1aa"
+            textAnchor="middle"
+            fontFamily="monospace"
+          >
+            {ci}
+          </text>
+        ))}
 
-        {/* Row tick labels */}
-        {N_TICKS.map((n) => {
-          const ri = n - 2;
-          return (
-            <text
-              key={n}
-              x={HM_LM - 4}
-              y={HM_TM + ri * HM_CELL + HM_CELL / 2 + 3}
-              fontSize="8"
-              fill="var(--color-muted-foreground)"
-              textAnchor="end"
-              fontFamily="monospace"
-            >
-              {n}
-            </text>
-          );
-        })}
+        {nTicks.map((ri) => (
+          <text
+            key={ri}
+            x={lm - 6}
+            y={tm + ri * cellSize + cellSize / 2 + 4}
+            fontSize="11"
+            fill="#a1a1aa"
+            textAnchor="end"
+            fontFamily="monospace"
+          >
+            {ri}
+          </text>
+        ))}
 
         {cells}
 
-        {/* Legend bar */}
+        {/* value color bar — vertical, right of grid */}
         <rect
-          x={HM_LM}
-          y={HM_TM + gridH + 8}
-          width={gridW}
-          height={6}
-          rx={3}
-          fill="url(#hinge-hm-grad)"
+          x={valBarX}
+          y={tm}
+          width={valBarW}
+          height={gridH}
+          rx={4}
+          fill="url(#input-hm-grad)"
         />
         <text
-          x={HM_LM}
-          y={HM_TM + gridH + 24}
-          fontSize="8"
-          fill="var(--color-muted-foreground)"
+          x={valBarX + valBarW / 2}
+          y={tm - 6}
+          fontSize="11"
+          fill="#a1a1aa"
           fontFamily="monospace"
+          textAnchor="middle"
         >
-          0
+          {absMax.toFixed(1)}
         </text>
         <text
-          x={HM_LM + gridW}
-          y={HM_TM + gridH + 24}
-          fontSize="8"
-          fill="var(--color-muted-foreground)"
+          x={valBarX + valBarW / 2}
+          y={tm + gridH + 14}
+          fontSize="11"
+          fill="#a1a1aa"
           fontFamily="monospace"
+          textAnchor="middle"
+        >
+          {(-absMax).toFixed(1)}
+        </text>
+        <text
+          x={valBarX + valBarW / 2}
+          y={tm + gridH / 2 + 4}
+          fontSize="11"
+          fontWeight="600"
+          fill="#d4d4d8"
+          textAnchor="middle"
+          transform={`rotate(-90, ${valBarX + valBarW / 2}, ${tm + gridH / 2})`}
+        >
+          value
+        </text>
+      </svg>
+
+      {/* std heatmap — 1 row × D columns */}
+      <svg
+        viewBox={`0 0 ${stdSvgW} ${stdSvgH}`}
+        width={stdSvgW}
+        height={stdSvgH}
+        className="mt-2"
+        role="img"
+        aria-label="Per-dimension standard deviation heatmap"
+      >
+        <defs>
+          <linearGradient id="std-bar-grad" x1="0" x2="0" y1="1" y2="0">
+            {stdLegendStops.map((s, i) => (
+              <stop key={i} offset={s.offset} stopColor={s.color} />
+            ))}
+          </linearGradient>
+        </defs>
+
+        <text
+          x={lm - 6}
+          y={stdTm + stdRowH / 2 + 4}
+          fontSize="11"
+          fontWeight="600"
+          fill="#d4d4d8"
           textAnchor="end"
         >
-          {maxLoss.toFixed(2)}
+          std
+        </text>
+
+        {dTicks.map((ci) => (
+          <text
+            key={ci}
+            x={lm + ci * cellSize + cellSize / 2}
+            y={stdTm + stdRowH + 14}
+            fontSize="11"
+            fill="#a1a1aa"
+            textAnchor="middle"
+            fontFamily="monospace"
+          >
+            {ci}
+          </text>
+        ))}
+
+        {Array.from(stds).map((s, ci) => (
+          <rect
+            key={ci}
+            x={lm + ci * cellSize}
+            y={stdTm}
+            width={cellSize}
+            height={stdRowH}
+            fill={stdColorScale(s)}
+          />
+        ))}
+
+        {/* std color bar — vertical, right side */}
+        <rect
+          x={stdValBarX}
+          y={stdTm}
+          width={valBarW}
+          height={stdBarH}
+          rx={4}
+          fill="url(#std-bar-grad)"
+        />
+        <text
+          x={stdValBarX + valBarW + 4}
+          y={stdTm + 4}
+          fontSize="11"
+          fill="#a1a1aa"
+          fontFamily="monospace"
+          dominantBaseline="hanging"
+        >
+          {maxStd.toFixed(2)}
+        </text>
+        <text
+          x={stdValBarX + valBarW + 4}
+          y={stdTm + stdBarH}
+          fontSize="11"
+          fill="#a1a1aa"
+          fontFamily="monospace"
+          dominantBaseline="auto"
+        >
+          0
         </text>
       </svg>
     </figure>

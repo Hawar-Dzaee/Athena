@@ -49,10 +49,10 @@ happens when just one dimension collapses while the other stays spread.
 
 <HingeStdLossDemo />
 
-**Heatmap view:** how does the loss behave as batch size $N$ and projection
-dimensionality $D$ scale? Each cell draws $N$ samples from $\mathcal{N}(0, \sigma)$
-across $D$ dimensions and computes the average hinge penalty. Small $N$ makes the
-sample std unreliable — the loss stays high even when the true spread exceeds $\gamma$.
+**Input data:** the heatmap below shows the raw $N \times D$ data matrix — each
+cell is one sample value drawn from $\mathcal{N}(0, \sigma)$. Blue is negative,
+red is positive, dark is near zero. This is the input that goes into the
+HingeStdLoss calculation above.
 
 <HingeStdHeatmap />
 
