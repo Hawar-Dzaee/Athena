@@ -393,23 +393,38 @@ export function HingeStdLossDemo() {
 }
 
 export function HingeStdHeatmap() {
-  const [n, setN] = useState(16);
-  const [d, setD] = useState(16);
-  const [spread, setSpread] = useState(1.0);
-  const [seed, setSeed] = useState(42);
+  type Preset = "ideal" | "collapsed" | "dim-collapse";
+  const [n, setN] = useState(8);
+  const [d, setD] = useState(8);
+  const [gamma, setGamma] = useState(1.0);
+  const [preset, setPreset] = useState<Preset>("ideal");
 
-  const { data, absMax, stds, maxStd } = useMemo(() => {
-    const rng = mulberry32(seed);
+  const { data, absMax, stds, maxStd, hinges, maxHinge, totalLoss } = useMemo(() => {
     const flat = new Float32Array(n * d);
-    let mx = 0;
-    for (let ri = 0; ri < n; ri++) {
-      for (let ci = 0; ci < d; ci++) {
-        const val = gaussianSample(rng) * spread;
-        flat[ri * d + ci] = val;
-        const a = Math.abs(val);
-        if (a > mx) mx = a;
+    const rng = mulberry32(42);
+
+    if (preset === "ideal") {
+      for (let ri = 0; ri < n; ri++)
+        for (let ci = 0; ci < d; ci++)
+          flat[ri * d + ci] = gaussianSample(rng) * 1.5;
+    } else if (preset === "collapsed") {
+      for (let ri = 0; ri < n; ri++)
+        for (let ci = 0; ci < d; ci++)
+          flat[ri * d + ci] = gaussianSample(rng) * 0.05;
+    } else {
+      for (let ri = 0; ri < n; ri++) {
+        const val = n === 1 ? 0 : -2 + (4 * ri) / (n - 1);
+        for (let ci = 0; ci < d; ci++)
+          flat[ri * d + ci] = val;
       }
     }
+
+    let mx = 0;
+    for (let i = 0; i < flat.length; i++) {
+      const a = Math.abs(flat[i]);
+      if (a > mx) mx = a;
+    }
+
     const colStds = new Float32Array(d);
     let ms = 0;
     for (let ci = 0; ci < d; ci++) {
@@ -425,23 +440,48 @@ export function HingeStdHeatmap() {
       colStds[ci] = std;
       if (std > ms) ms = std;
     }
-    return { data: flat, absMax: Math.max(mx, 0.01), stds: colStds, maxStd: Math.max(ms, 0.01) };
-  }, [n, d, spread, seed]);
+
+    const colHinges = new Float32Array(d);
+    let mh = 0;
+    let lossSum = 0;
+    for (let ci = 0; ci < d; ci++) {
+      const h = Math.max(0, gamma - colStds[ci]);
+      colHinges[ci] = h;
+      if (h > mh) mh = h;
+      lossSum += h;
+    }
+
+    return {
+      data: flat,
+      absMax: Math.max(mx, 0.01),
+      stds: colStds,
+      maxStd: Math.max(ms, 0.01),
+      hinges: colHinges,
+      maxHinge: Math.max(mh, 0.01),
+      totalLoss: lossSum / d,
+    };
+  }, [n, d, gamma, preset]);
+
+  const scaleMax = Math.max(absMax, 2.5);
 
   const colorScale = useMemo(() => {
     const interp = d3.interpolateRgbBasis(["#3b82f6", "#1e1e2e", "#ef4444"]);
-    return (v: number) => interp((v / absMax + 1) / 2);
-  }, [absMax]);
+    return (v: number) => interp((v / scaleMax + 1) / 2);
+  }, [scaleMax]);
 
   const stdColorScale = useMemo(() => {
     const interp = d3.interpolateRgbBasis(["#312e81", "#8b5cf6", "#10b981"]);
-    return (v: number) => interp(Math.min(v / maxStd, 1));
-  }, [maxStd]);
+    return (v: number) => interp(Math.min(v / Math.max(maxStd, gamma), 1));
+  }, [maxStd, gamma]);
+
+  const hingeColorScale = useMemo(() => {
+    const interp = d3.interpolateRgbBasis(["#1e1e2e", "#dc2626", "#f87171"]);
+    return (v: number) => interp(maxHinge > 0.001 ? Math.min(v / maxHinge, 1) : 0);
+  }, [maxHinge]);
 
   const cellSize = Math.max(12, Math.min(36, Math.floor(1200 / Math.max(n, d))));
   const lm = 48;
   const tm = 36;
-  const rm = 70;
   const gridW = d * cellSize;
   const gridH = n * cellSize;
   const valBarX = lm + gridW + 16;
@@ -449,13 +489,11 @@ export function HingeStdHeatmap() {
   const svgW = valBarX + valBarW + 40;
   const svgH = tm + gridH + 16;
 
-  const stdTm = 14;
-  const stdBm = 22;
-  const stdRowH = cellSize;
-  const stdBarH = 80;
-  const stdSvgH = stdTm + Math.max(stdRowH, stdBarH) + stdBm;
-  const stdValBarX = valBarX;
-  const stdSvgW = svgW;
+  const statsTm = 14;
+  const gapH = 8;
+  const hingeRowY = statsTm + cellSize + gapH;
+  const tickY = hingeRowY + cellSize + 4;
+  const statsSvgH = tickY + 18;
 
   const nTicks = useMemo(() => {
     const ticks: number[] = [0];
@@ -495,22 +533,35 @@ export function HingeStdHeatmap() {
   const legendStops = useMemo(() =>
     Array.from({ length: 7 }, (_, i) => ({
       offset: `${(i / 6) * 100}%`,
-      color: colorScale(-absMax + (i / 6) * 2 * absMax),
+      color: colorScale(-scaleMax + (i / 6) * 2 * scaleMax),
     })),
-  [colorScale, absMax]);
+  [colorScale, scaleMax]);
 
   const stdLegendStops = useMemo(() =>
     Array.from({ length: 7 }, (_, i) => ({
       offset: `${(i / 6) * 100}%`,
-      color: stdColorScale((i / 6) * maxStd),
+      color: stdColorScale((i / 6) * Math.max(maxStd, gamma)),
     })),
-  [stdColorScale, maxStd]);
+  [stdColorScale, maxStd, gamma]);
+
+  const hingeLegendStops = useMemo(() =>
+    Array.from({ length: 7 }, (_, i) => ({
+      offset: `${(i / 6) * 100}%`,
+      color: hingeColorScale((i / 6) * maxHinge),
+    })),
+  [hingeColorScale, maxHinge]);
+
+  const presetMeta: { key: Preset; label: string }[] = [
+    { key: "ideal", label: "Ideal" },
+    { key: "collapsed", label: "Collapsed" },
+    { key: "dim-collapse", label: "Dim. Collapse" },
+  ];
 
   return (
     <figure
       className="my-8"
       role="figure"
-      aria-label="Input data heatmap (N × D)"
+      aria-label="HingeStdLoss heatmap with preset datasets"
     >
       <div className="mb-3 flex flex-wrap items-end gap-4">
         <label className="flex flex-col gap-1">
@@ -541,24 +592,46 @@ export function HingeStdHeatmap() {
         </label>
         <label className="flex flex-col gap-1">
           <div className="flex justify-between text-xs text-[var(--color-muted-foreground)]">
-            <span className="font-semibold uppercase tracking-wider">Spread (σ)</span>
-            <span className="ml-3 font-mono">{spread.toFixed(1)}</span>
+            <span className="font-semibold uppercase tracking-wider">Margin (γ)</span>
+            <span className="ml-3 font-mono">{gamma.toFixed(1)}</span>
           </div>
           <input
             type="range" min={0.1} max={3.0} step={0.1}
-            value={spread}
-            onChange={(e) => setSpread(parseFloat(e.target.value))}
+            value={gamma}
+            onChange={(e) => setGamma(parseFloat(e.target.value))}
             className="w-36 accent-violet-500"
-            aria-label="Data spread"
+            aria-label="Std margin threshold"
           />
         </label>
-        <button
-          onClick={() => setSeed((s) => s + 1)}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-1.5 text-xs text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-border)]"
-        >
-          Re-roll
-        </button>
       </div>
+
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {presetMeta.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setPreset(key)}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+              preset === key
+                ? "border-violet-500 bg-violet-500/20 text-violet-300"
+                : "border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] hover:bg-[var(--color-border)]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <p className="mb-4 text-sm leading-relaxed text-[var(--color-muted-foreground)]">
+        {preset === "ideal" && "Each dimension has high variance across the batch — std exceeds γ, so the hinge penalty is zero."}
+        {preset === "collapsed" && "All samples output nearly identical values — std ≪ γ, triggering maximum penalty."}
+        {preset === "dim-collapse" && (
+          <>
+            Samples differ across the batch (high per-dim std → loss = 0), but every dimension
+            carries <em className="text-amber-400">identical</em> information.
+            HingeStdLoss is blind to this — you need CovarianceLoss.
+          </>
+        )}
+      </p>
 
       <svg
         viewBox={`0 0 ${svgW} ${svgH}`}
@@ -645,7 +718,7 @@ export function HingeStdHeatmap() {
           fontFamily="monospace"
           textAnchor="middle"
         >
-          {absMax.toFixed(1)}
+          {scaleMax.toFixed(1)}
         </text>
         <text
           x={valBarX + valBarW / 2}
@@ -655,7 +728,7 @@ export function HingeStdHeatmap() {
           fontFamily="monospace"
           textAnchor="middle"
         >
-          {(-absMax).toFixed(1)}
+          {(-scaleMax).toFixed(1)}
         </text>
         <text
           x={valBarX + valBarW / 2}
@@ -670,14 +743,14 @@ export function HingeStdHeatmap() {
         </text>
       </svg>
 
-      {/* std heatmap — 1 row × D columns */}
+      {/* Stats: std row + hinge row */}
       <svg
-        viewBox={`0 0 ${stdSvgW} ${stdSvgH}`}
-        width={stdSvgW}
-        height={stdSvgH}
+        viewBox={`0 0 ${svgW} ${statsSvgH}`}
+        width={svgW}
+        height={statsSvgH}
         className="mt-2"
         role="img"
-        aria-label="Per-dimension standard deviation heatmap"
+        aria-label="Per-dimension std and hinge penalty"
       >
         <defs>
           <linearGradient id="std-bar-grad" x1="0" x2="0" y1="1" y2="0">
@@ -685,74 +758,70 @@ export function HingeStdHeatmap() {
               <stop key={i} offset={s.offset} stopColor={s.color} />
             ))}
           </linearGradient>
+          <linearGradient id="hinge-bar-grad" x1="0" x2="0" y1="1" y2="0">
+            {hingeLegendStops.map((s, i) => (
+              <stop key={i} offset={s.offset} stopColor={s.color} />
+            ))}
+          </linearGradient>
         </defs>
 
-        <text
-          x={lm - 6}
-          y={stdTm + stdRowH / 2 + 4}
-          fontSize="11"
-          fontWeight="600"
-          fill="#d4d4d8"
-          textAnchor="end"
-        >
+        {/* std row */}
+        <text x={lm - 6} y={statsTm + cellSize / 2 + 4} fontSize="11" fontWeight="600"
+          fill="#d4d4d8" textAnchor="end">
           std
         </text>
+        {Array.from(stds).map((s, ci) => (
+          <rect key={ci} x={lm + ci * cellSize} y={statsTm}
+            width={cellSize} height={cellSize} fill={stdColorScale(s)} />
+        ))}
+        <rect x={valBarX} y={statsTm} width={valBarW} height={cellSize} rx={4}
+          fill="url(#std-bar-grad)" />
+        <text x={valBarX + valBarW + 4} y={statsTm + 4} fontSize="10" fill="#a1a1aa"
+          fontFamily="monospace" dominantBaseline="hanging">
+          {Math.max(maxStd, gamma).toFixed(1)}
+        </text>
+        <text x={valBarX + valBarW + 4} y={statsTm + cellSize} fontSize="10" fill="#a1a1aa"
+          fontFamily="monospace" dominantBaseline="auto">
+          0
+        </text>
 
+        {/* hinge row */}
+        <text x={lm - 6} y={hingeRowY + cellSize / 2 + 4} fontSize="11" fontWeight="600"
+          fill="#d4d4d8" textAnchor="end">
+          hinge
+        </text>
+        {Array.from(hinges).map((h, ci) => (
+          <rect key={ci} x={lm + ci * cellSize} y={hingeRowY}
+            width={cellSize} height={cellSize} fill={hingeColorScale(h)} />
+        ))}
+        <rect x={valBarX} y={hingeRowY} width={valBarW} height={cellSize} rx={4}
+          fill="url(#hinge-bar-grad)" />
+        <text x={valBarX + valBarW + 4} y={hingeRowY + 4} fontSize="10" fill="#a1a1aa"
+          fontFamily="monospace" dominantBaseline="hanging">
+          {maxHinge > 0.001 ? maxHinge.toFixed(2) : "0"}
+        </text>
+        <text x={valBarX + valBarW + 4} y={hingeRowY + cellSize} fontSize="10" fill="#a1a1aa"
+          fontFamily="monospace" dominantBaseline="auto">
+          0
+        </text>
+
+        {/* dimension tick labels */}
         {dTicks.map((ci) => (
-          <text
-            key={ci}
-            x={lm + ci * cellSize + cellSize / 2}
-            y={stdTm + stdRowH + 14}
-            fontSize="11"
-            fill="#a1a1aa"
-            textAnchor="middle"
-            fontFamily="monospace"
-          >
+          <text key={ci} x={lm + ci * cellSize + cellSize / 2} y={tickY + 10}
+            fontSize="11" fill="#a1a1aa" textAnchor="middle" fontFamily="monospace">
             {ci}
           </text>
         ))}
-
-        {Array.from(stds).map((s, ci) => (
-          <rect
-            key={ci}
-            x={lm + ci * cellSize}
-            y={stdTm}
-            width={cellSize}
-            height={stdRowH}
-            fill={stdColorScale(s)}
-          />
-        ))}
-
-        {/* std color bar — vertical, right side */}
-        <rect
-          x={stdValBarX}
-          y={stdTm}
-          width={valBarW}
-          height={stdBarH}
-          rx={4}
-          fill="url(#std-bar-grad)"
-        />
-        <text
-          x={stdValBarX + valBarW + 4}
-          y={stdTm + 4}
-          fontSize="11"
-          fill="#a1a1aa"
-          fontFamily="monospace"
-          dominantBaseline="hanging"
-        >
-          {maxStd.toFixed(2)}
-        </text>
-        <text
-          x={stdValBarX + valBarW + 4}
-          y={stdTm + stdBarH}
-          fontSize="11"
-          fill="#a1a1aa"
-          fontFamily="monospace"
-          dominantBaseline="auto"
-        >
-          0
-        </text>
       </svg>
+
+      {/* Loss readout */}
+      <div className="mt-3 flex items-baseline gap-2 font-mono text-sm">
+        <span className="font-semibold text-[var(--color-foreground)]">HingeStdLoss</span>
+        <span className="text-[var(--color-muted-foreground)]">=</span>
+        <span className={`text-lg font-bold ${totalLoss > 0.001 ? "text-red-400" : "text-emerald-400"}`}>
+          {totalLoss.toFixed(3)}
+        </span>
+      </div>
     </figure>
   );
 }

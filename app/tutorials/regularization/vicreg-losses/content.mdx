@@ -49,10 +49,16 @@ happens when just one dimension collapses while the other stays spread.
 
 <HingeStdLossDemo />
 
-**Input data:** the heatmap below shows the raw $N \times D$ data matrix — each
-cell is one sample value drawn from $\mathcal{N}(0, \sigma)$. Blue is negative,
-red is positive, dark is near zero. This is the input that goes into the
-HingeStdLoss calculation above.
+**Input data:** the heatmap below shows the raw $N \times D$ data matrix.
+Blue is negative, red is positive, dark is near zero. Switch between three
+datasets to see when HingeStdLoss fires — and when it *doesn't* even though
+something is wrong:
+
+- **Ideal** — messy random data, high per-dim std, loss is zero.
+- **Collapsed** — all samples are nearly identical, std ≪ γ, maximum penalty.
+- **Dim. Collapse** — samples differ (std is fine), but every dimension
+  carries the same value per sample. HingeStdLoss reads 0 — only
+  CovarianceLoss can catch this.
 
 <HingeStdHeatmap />
 
