@@ -114,7 +114,7 @@ npm run lint         # eslint
 - **Use the right viz library for the right job.** Don't do 3D in D3, or architecture diagrams in raw SVG.
 - **MDX is prose; React components are interactivity.** Drop a `<Component />` in the middle of a paragraph when that's what makes the lesson land.
 - **Math uses LaTeX.** `$...$` for inline, `$$...$$` for display blocks.
-- **Code snippets use fenced blocks** with a language tag — Shiki handles theming.
+- **Code snippets use fenced blocks** with a language tag — Shiki handles theming. The Shiki theme is **`one-dark-pro`** (single theme, not dual). Code blocks always render on a dark background (`#282c34`) regardless of page light/dark mode. Do not switch to a dual-theme setup or change the theme without an explicit ask.
 - **Don't add `'use client'` to MDX files.** Put client logic in components inside `components/` and import them.
 - **Color tokens** live in [app/globals.css](app/globals.css) as CSS variables exposed to Tailwind via `@theme inline`. Use semantic utilities (`bg-background`, `text-foreground`, `border-border`, `text-accent`) — don't hardcode colors.
 - **Accessibility:** every interactive widget needs a `role`/`aria-label`, every image needs `alt` text. Adding it later is harder.

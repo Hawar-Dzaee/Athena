@@ -110,7 +110,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     },
     pre: ({ children, ...props }) => (
       <pre
-        className="my-6 overflow-x-auto rounded-xl border border-border/60 bg-[#0b1020] px-5 py-4 text-sm leading-relaxed shadow-sm"
+        className="my-6 overflow-x-auto rounded-xl border border-border/60 bg-[#282c34] px-5 py-4 text-sm leading-relaxed shadow-sm"
         {...props}
       >
         {children}

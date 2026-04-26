@@ -476,8 +476,7 @@ function HighlightedCode({ code }: { code: string }) {
     let cancelled = false;
     codeToHtml(code, {
       lang: "python",
-      themes: { light: "github-light", dark: "github-dark" },
-      defaultColor: false,
+      theme: "one-dark-pro",
     }).then((result) => {
       if (!cancelled) setHtml(result);
     });

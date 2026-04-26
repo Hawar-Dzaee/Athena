@@ -107,16 +107,9 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Shiki dual-theme support (used by the PyTorch code panel) */
-.shiki,
+/* Shiki single-theme (one-dark-pro) — code blocks always use a dark bg */
 .shiki span {
-  color: var(--shiki-light);
-  background-color: var(--shiki-light-bg);
-}
-.dark .shiki,
-.dark .shiki span {
-  color: var(--shiki-dark);
-  background-color: var(--shiki-dark-bg);
+  background-color: transparent !important;
 }
 
 body {

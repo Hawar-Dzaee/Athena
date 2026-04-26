@@ -5,10 +5,7 @@ import rehypeKatex from "rehype-katex";
 import rehypePrettyCode, { type Options as PrettyCodeOptions } from "rehype-pretty-code";
 
 const prettyCodeOptions: PrettyCodeOptions = {
-  theme: {
-    light: "github-light",
-    dark: "github-dark",
-  },
+  theme: "one-dark-pro",
   keepBackground: false,
   defaultLang: "plaintext",
 };
