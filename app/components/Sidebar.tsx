@@ -46,25 +46,51 @@ export function Sidebar({ topics }: { topics: Topic[] }) {
               {isOpen && (
                 items.length > 0 ? (
                   <ul className="mt-1 mb-1 space-y-0.5 pl-5">
-                    {items.map((t) => {
-                      const href = tutorialPath(t);
-                      const active = pathname === href;
-                      return (
-                        <li key={t.slug}>
-                          <Link
-                            href={href}
-                            className={`block rounded-md px-2 py-1.5 text-sm transition ${
-                              active
-                                ? "border-l-2 border-accent bg-muted/60 pl-[calc(0.5rem-2px)] font-medium text-foreground"
-                                : "text-foreground/80 hover:bg-muted/50 hover:text-foreground"
-                            }`}
-                            aria-current={active ? "page" : undefined}
-                          >
-                            {t.title}
-                          </Link>
-                        </li>
-                      );
-                    })}
+                    {items
+                      .filter((t) => !t.parent)
+                      .map((t) => {
+                        const href = tutorialPath(t);
+                        const active = pathname === href;
+                        const children = items.filter((c) => c.parent === t.slug);
+                        return (
+                          <li key={t.slug}>
+                            <Link
+                              href={href}
+                              className={`block rounded-md px-2 py-1.5 text-sm transition ${
+                                active
+                                  ? "border-l-2 border-accent bg-muted/60 pl-[calc(0.5rem-2px)] font-medium text-foreground"
+                                  : "text-foreground/80 hover:bg-muted/50 hover:text-foreground"
+                              }`}
+                              aria-current={active ? "page" : undefined}
+                            >
+                              {t.title}
+                            </Link>
+                            {children.length > 0 && (
+                              <ul className="mt-0.5 space-y-0.5 pl-4">
+                                {children.map((c) => {
+                                  const childHref = tutorialPath(c);
+                                  const childActive = pathname === childHref;
+                                  return (
+                                    <li key={c.slug}>
+                                      <Link
+                                        href={childHref}
+                                        className={`block rounded-md px-2 py-1.5 text-[13px] transition ${
+                                          childActive
+                                            ? "border-l-2 border-accent bg-muted/60 pl-[calc(0.5rem-2px)] font-medium text-foreground"
+                                            : "text-foreground/60 hover:bg-muted/50 hover:text-foreground"
+                                        }`}
+                                        aria-current={childActive ? "page" : undefined}
+                                      >
+                                        {c.title}
+                                      </Link>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </li>
+                        );
+                      })}
                   </ul>
                 ) : (
                   <p className="mt-1 mb-1 pl-5 text-xs italic text-foreground/50">Coming soon</p>

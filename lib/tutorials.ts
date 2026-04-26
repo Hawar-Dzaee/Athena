@@ -18,6 +18,8 @@ export interface Tutorial {
   status: TutorialStatus;
   /** Estimated minutes to read+play through. Optional. */
   minutes?: number;
+  /** Slug of the parent tutorial within the same topic (for sub-pages). */
+  parent?: string;
 }
 
 export const TOPICS: Record<Topic, { label: string; description: string; accent: string }> = {
@@ -138,6 +140,16 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 10,
   },
   {
+    slug: "hinge-std-loss",
+    topic: "regularization",
+    title: "HingeStdLoss",
+    blurb:
+      "How HingeStdLoss prevents point collapse by enforcing a minimum per-feature standard deviation — with interactive scatter plot and heatmap demos.",
+    status: "ready",
+    minutes: 5,
+    parent: "vicreg-losses",
+  },
+  {
     slug: "gaussian-distribution",
     topic: "statistics",
     title: "Gaussian Distribution",
@@ -167,6 +179,9 @@ export const TUTORIALS: Tutorial[] = [
 ];
 
 export function tutorialPath(t: Tutorial): string {
+  if (t.parent) {
+    return `/tutorials/${t.topic}/${t.parent}/${t.slug}`;
+  }
   return `/tutorials/${t.topic}/${t.slug}`;
 }
 

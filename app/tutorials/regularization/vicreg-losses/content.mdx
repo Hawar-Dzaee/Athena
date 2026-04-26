@@ -1,4 +1,3 @@
-import { HingeStdLossDemo, HingeStdHeatmap } from "./components/HingeStdLossDemo";
 import { CovarianceLossDemo } from "./components/CovarianceLossDemo";
 import { VICRegLossDemo } from "./components/VICRegLossDemo";
 
@@ -22,45 +21,7 @@ deviation across the batch. If std drops below a margin $\gamma$, a hinge
 penalty kicks in. This prevents **point collapse** — the failure mode where
 all representations converge to a single constant.
 
-```python
-class HingeStdLoss(torch.nn.Module):
-    def __init__(self, std_margin: float = 1.0):
-        super().__init__()
-        self.std_margin = std_margin
-
-    def forward(self, x: torch.Tensor):
-        x = x - x.mean(dim=0, keepdim=True)
-        std = torch.sqrt(x.var(dim=0) + 0.0001)
-        std_loss = torch.mean(F.relu(self.std_margin - std))
-        return std_loss
-```
-
-**Line by line:**
-
-- `x.var(dim=0)` — variance of each feature across the batch (Bessel-corrected, divides by $N-1$).
-- `+ 0.0001` — numerical guard to avoid $\sqrt{0}$.
-- `F.relu(self.std_margin - std)` — the hinge: zero when $\text{std} \geq \gamma$,
-  positive penalty when below.
-- `torch.mean(...)` — average the per-feature penalties into one scalar.
-
-**Try it:** drag the points to collapse them and watch the loss spike.
-Use the margin slider to change $\gamma$. Click **Dim 0 only** to see what
-happens when just one dimension collapses while the other stays spread.
-
-<HingeStdLossDemo />
-
-**Input data:** the heatmap below shows the raw $N \times D$ data matrix.
-Blue is negative, red is positive, dark is near zero. Switch between three
-datasets to see when HingeStdLoss fires — and when it *doesn't* even though
-something is wrong:
-
-- **Ideal** — messy random data, high per-dim std, loss is zero.
-- **Collapsed** — all samples are nearly identical, std ≪ γ, maximum penalty.
-- **Dim. Collapse** — samples differ (std is fine), but every dimension
-  carries the same value per sample. HingeStdLoss reads 0 — only
-  CovarianceLoss can catch this.
-
-<HingeStdHeatmap />
+[**Explore HingeStdLoss in detail**](/tutorials/regularization/vicreg-losses/hinge-std-loss) — interactive scatter plot, line-by-line code walkthrough, and heatmap demos.
 
 ---
 
