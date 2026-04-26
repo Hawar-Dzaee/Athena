@@ -21,21 +21,6 @@ export interface Tutorial {
 }
 
 export const TOPICS: Record<Topic, { label: string; description: string; accent: string }> = {
-  "linear-algebra": {
-    label: "Linear Algebra",
-    description: "Vectors, matrices, transformations — geometry first.",
-    accent: "from-indigo-500 to-violet-500",
-  },
-  statistics: {
-    label: "Statistics",
-    description: "Distributions, estimators, uncertainty.",
-    accent: "from-emerald-500 to-teal-500",
-  },
-  probability: {
-    label: "Probability",
-    description: "Sample spaces, conditional reasoning, Bayes.",
-    accent: "from-amber-500 to-orange-500",
-  },
   "deep-learning": {
     label: "Deep Learning",
     description: "Architectures, training dynamics, intuition pumps.",
@@ -55,6 +40,21 @@ export const TOPICS: Record<Topic, { label: string; description: string; accent:
     label: "Optimizer",
     description: "Learning rate strategies and parameter update rules for training neural networks.",
     accent: "from-fuchsia-500 to-purple-500",
+  },
+  "linear-algebra": {
+    label: "Linear Algebra",
+    description: "Vectors, matrices, transformations — geometry first.",
+    accent: "from-indigo-500 to-violet-500",
+  },
+  statistics: {
+    label: "Statistics",
+    description: "Distributions, estimators, uncertainty.",
+    accent: "from-emerald-500 to-teal-500",
+  },
+  probability: {
+    label: "Probability",
+    description: "Sample spaces, conditional reasoning, Bayes.",
+    accent: "from-amber-500 to-orange-500",
   },
 };
 
