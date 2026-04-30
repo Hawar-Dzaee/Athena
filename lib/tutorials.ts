@@ -80,6 +80,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 7,
   },
   {
+    slug: "l2-norm",
+    topic: "linear-algebra",
+    title: "The L2 norm, geometrically",
+    blurb:
+      "Drag a vector and watch its length update — the L2 norm is the Pythagorean theorem in disguise.",
+    status: "ready",
+    minutes: 6,
+  },
+  {
     slug: "playground",
     topic: "pytorch",
     title: "PyTorch Playground",

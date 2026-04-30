@@ -1,0 +1,101 @@
+import { L2NormPlayground2D } from "./components/L2NormPlayground2D";
+
+# The L2 norm, geometrically
+
+The **L2 norm** of a vector is its length. That's it. Every other description — "Euclidean
+distance from the origin," "root sum of squares," "the $\ell^2$ norm" — is a different way
+of saying the same thing: **how far does this arrow reach?**
+
+## Measuring length with Pythagoras
+
+Drag the indigo vector below. The dashed right triangle decomposes the vector into its
+horizontal and vertical components. The L2 norm is the hypotenuse.
+
+<L2NormPlayground2D />
+
+The formula falls straight out of the Pythagorean theorem. For a 2D vector
+$\mathbf{v} = (v_x, v_y)$:
+
+$$
+\|\mathbf{v}\|_2 = \sqrt{v_x^2 + v_y^2}
+$$
+
+The subscript $2$ refers to the power used inside the sum — each component is
+**squared**, summed, and then you take the **square** root. In code:
+
+```ts
+type Vec2 = { x: number; y: number };
+
+function l2Norm(v: Vec2): number {
+  return Math.sqrt(v.x * v.x + v.y * v.y);
+}
+```
+
+## The unit circle
+
+Toggle **"Show L2 unit circle"** in the sidebar. Every vector whose tip lands on that
+circle has norm exactly $1$ — these are the **unit vectors**. The circle is perfectly
+round because the L2 norm treats all directions equally: the diagonal $(0.707, 0.707)$ is
+just as "long" as the axis-aligned $(1, 0)$.
+
+Now toggle **"Show L1 unit ball"** alongside it. The L1 norm $\|v\|_1 = |v_x| + |v_y|$
+produces a diamond instead of a circle. In the L1 world, the diagonal costs *more* than
+the axis — walking to $(1, 1)$ means paying $|1| + |1| = 2$, not $\sqrt{2} \approx 1.41$.
+The shape of the unit ball is a fingerprint of the norm: change the norm, and the shape
+changes with it.
+
+## Why the 2 matters
+
+The L2 norm belongs to a family: the **Lp norms**.
+
+$$
+\|\mathbf{v}\|_p = \left(\sum_i |v_i|^p\right)^{1/p}
+$$
+
+- $p = 1$: the **Manhattan norm** — sum of absolute values. Taxicab distance.
+- $p = 2$: the **Euclidean norm** — the one your ruler measures. The only Lp norm that
+  comes from an inner product, and the only one that is rotationally invariant.
+- $p = \infty$: the **max norm** — just the largest component. $\|(3, -7)\|_\infty = 7$.
+
+The L2 norm is special because it's tied to the **dot product**:
+
+$$
+\|\mathbf{v}\|_2 = \sqrt{\mathbf{v} \cdot \mathbf{v}}
+$$
+
+This connection is why L2 shows up everywhere: least-squares regression minimises the L2
+norm of the residual vector; the Frobenius norm of a matrix is the L2 norm of its entries
+laid flat; weight decay in neural networks is L2 regularisation on the parameter vector.
+
+## In higher dimensions
+
+The formula extends to $\mathbb{R}^n$ with no surprises:
+
+$$
+\|\mathbf{v}\|_2 = \sqrt{v_1^2 + v_2^2 + \cdots + v_n^2}
+$$
+
+```ts
+function l2NormNd(v: number[]): number {
+  let sum = 0;
+  for (const vi of v) sum += vi * vi;
+  return Math.sqrt(sum);
+}
+```
+
+You can't draw a right triangle in ten dimensions, but the algebra doesn't care.
+The L2 norm still means "length" — the distance from the origin to the tip of
+the vector — in exactly the same sense as the 2D case.
+
+## What this is teaching you
+
+The L2 norm is the most natural way to measure how big a vector is. It comes from
+the Pythagorean theorem, it's the only Lp norm that respects rotations, and it's
+the bridge between geometry (lengths, angles, projections) and algebra (dot products,
+inner products, least squares). Every time you see $\|\cdot\|$ without a subscript in
+a textbook, they almost certainly mean L2.
+
+---
+
+*Next up: the dot product — where the L2 norm meets angles, and projections start to
+make sense.*
