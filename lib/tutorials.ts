@@ -150,6 +150,15 @@ export const TUTORIALS: Tutorial[] = [
     parent: "vicreg-losses",
   },
   {
+    slug: "bcs",
+    topic: "regularization",
+    title: "BCS: Batched Characteristic Slicing",
+    blurb:
+      "How BCS enforces Gaussianity on random 1D projections to prevent representation collapse — with interactive characteristic function and loss demos.",
+    status: "ready",
+    minutes: 10,
+  },
+  {
     slug: "gaussian-distribution",
     topic: "statistics",
     title: "Gaussian Distribution",

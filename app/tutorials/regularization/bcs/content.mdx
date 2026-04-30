@@ -1,0 +1,173 @@
+import { EppsPulleyDemo } from "./components/EppsPulleyDemo";
+import { BCSDemo } from "./components/BCSDemo";
+
+# BCS: Batched Characteristic Slicing
+
+Self-supervised learning faces the same enemy as VICReg: **representation
+collapse**. The encoder can map everything to the same constant vector and
+perfectly satisfy the similarity objective.
+
+[VICReg](/tutorials/regularization/vicreg) fights collapse with three separate
+terms — variance, invariance, covariance — each targeting a specific failure
+mode. BCS takes a different approach: **one test that catches all failure modes
+at once**.
+
+## The key insight: Gaussianity implies non-collapse
+
+The **Cramér–Wold theorem** says: if every 1D projection of a distribution is
+Gaussian, the full distribution is **multivariate Gaussian**. And a multivariate
+Gaussian is automatically:
+
+- **Spread out** in every direction → no point collapse
+- **Full-rank** in its covariance → no dimensional collapse
+
+So instead of three separate checks, BCS enforces one condition: **project onto
+random 1D directions and verify that each projection looks Gaussian.**
+
+## The mechanism, piece by piece
+
+### 1. Random slicing
+
+```python
+with torch.no_grad():
+    g = torch.Generator(device=z1.device)
+    g.manual_seed(self.step)
+    A = torch.randn(z1.size(1), self.num_slices, device=dev, generator=g)
+    A /= A.norm(p=2, dim=0)
+view1 = z1 @ A   # (N, num_slices)
+view2 = z2 @ A
+```
+
+**Line by line:**
+
+- `A` has shape $(D, \text{num\_slices})$ — each column is a random unit vector
+  in embedding space.
+- `A /= A.norm(p=2, dim=0)` — normalize each column to unit length.
+- `z @ A` projects every embedding onto all directions at once. The result is
+  $(N, \text{num\_slices})$: each column is a 1D "slice" through the distribution.
+- The projection is in `no_grad()` — it's not learned, just random.
+- With enough slices (256 by default), we approximate "every direction."
+
+The seed rotates each step (`self.step += 1`), so different directions are
+sampled across training while keeping each step deterministic.
+
+---
+
+### 2. The Epps–Pulley test
+
+For each 1D slice, BCS checks: **does this look like a standard Gaussian?**
+
+It does this by comparing *characteristic functions* (CFs). The characteristic
+function of a random variable $X$ is:
+
+$$
+\varphi_X(t) = \mathbb{E}\!\left[e^{itX}\right] = \mathbb{E}[\cos(tX)] + i\,\mathbb{E}[\sin(tX)]
+$$
+
+For a standard Gaussian $\mathcal{N}(0,1)$, this simplifies to
+$\varphi(t) = e^{-t^2/2}$ — a real-valued bell curve in frequency space. The CF
+uniquely characterizes a distribution: two distributions with the same CF are
+identical.
+
+```python
+def epps_pulley(x, t_min=-3, t_max=3, n_points=10):
+    t = torch.linspace(t_min, t_max, n_points, device=x.device)
+    exp_f = torch.exp(-0.5 * t**2)
+    x_t = x.unsqueeze(2) * t          # (N, M, T)
+    ecf = (1j * x_t).exp().mean(0)    # (M, T), complex
+    err = exp_f * (ecf - exp_f).abs() ** 2
+    T = torch.trapz(err, t, dim=1)    # (M,)
+    return T
+```
+
+**Line by line:**
+
+- `exp_f = exp(−t²/2)` — the Gaussian CF, our target curve.
+- `(1j * x_t).exp().mean(0)` — the *empirical* CF (ECF): average $e^{itx}$
+  over the batch. This is complex-valued.
+- `(ecf − exp_f).abs()²` — squared distance between ECF and Gaussian CF at
+  each frequency.
+- `exp_f * …` — weight by the Gaussian CF, focusing on low frequencies where
+  the signal is strongest.
+- `trapz(…)` — integrate over $t$ to get one scalar per slice.
+
+If the data is truly $\mathcal{N}(0,1)$, the ECF matches the Gaussian CF and
+the statistic is zero. Any deviation — collapsed, bimodal, skewed — shows up as
+a gap between the curves.
+
+**Try it:** start with **Gaussian** and note the close match between the
+indigo ECF and the dashed green target. Then click **Collapsed** — the ECF stays
+flat near 1 while the Gaussian CF drops off. **Bimodal** makes the ECF
+oscillate. Drag points to explore edge cases.
+
+<EppsPulleyDemo />
+
+---
+
+### 3. Invariance (MSE)
+
+Same as VICReg — the learning signal:
+
+```python
+invariance_loss = F.mse_loss(z1, z2)
+```
+
+Pull paired views (two augmentations of the same image) together. Without this,
+the encoder has no reason to produce consistent representations.
+
+---
+
+### 4. The combined BCS loss
+
+```python
+class BCS(nn.Module):
+    def __init__(self, num_slices=256, lmbd=10.0):
+        super().__init__()
+        self.num_slices = num_slices
+        self.step = 0
+        self.lmbd = lmbd
+
+    def forward(self, z1, z2):
+        with torch.no_grad():
+            g = torch.Generator(device=z1.device)
+            g.manual_seed(self.step)
+            A = torch.randn(z1.size(1), self.num_slices, device=z1.device, generator=g)
+            A /= A.norm(p=2, dim=0)
+        view1 = z1 @ A
+        view2 = z2 @ A
+        self.step += 1
+        bcs = (epps_pulley(view1).mean() + epps_pulley(view2).mean()) / 2
+        invariance_loss = F.mse_loss(z1, z2)
+        total_loss = invariance_loss + self.lmbd * bcs
+        return {"loss": total_loss, "bcs_loss": bcs, "invariance_loss": invariance_loss}
+```
+
+Both views are tested for Gaussianity independently, then averaged. The
+coefficient `lmbd = 10.0` weights BCS heavily — keeping the distribution
+Gaussian matters more than a single MSE unit.
+
+**Try it:** the dashed colored lines are random projection directions. Drag
+circles (z1) and diamonds (z2) to see both losses respond. The per-slice bars
+show which directions are the most non-Gaussian. Click the presets:
+
+- **Gaussian** — spread, paired, Gaussian projections. All losses low.
+- **Collapsed** — everything at the origin. BCS spikes (flat ECF vs. dropping
+  Gaussian CF).
+- **Clustered** — two tight groups. Projections across the clusters are
+  bimodal → high BCS.
+- **Views apart** — well-spread but pairs far apart. Invariance loss spikes.
+
+<BCSDemo />
+
+## Key takeaways
+
+- **One test, multiple failure modes.** The Epps–Pulley Gaussianity test catches
+  point collapse, dimensional collapse, and distributional pathologies — all in
+  one scalar.
+- **Random slicing approximates all directions.** The Cramér–Wold theorem
+  guarantees completeness; 256 random slices per step (rotated each step) is
+  enough in practice.
+- **The ECF is the right tool.** Comparing characteristic functions is
+  mathematically principled and GPU-friendly — batched exp, mean, and integrate.
+- **Fewer knobs than VICReg.** One coefficient (λ) instead of two
+  (`std_coeff`, `cov_coeff`). The Gaussianity target is self-calibrating.
