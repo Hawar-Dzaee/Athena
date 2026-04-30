@@ -1,0 +1,118 @@
+import { DeterminantPlayground2D } from "./components/DeterminantPlayground2D";
+
+# The determinant, geometrically
+
+You have a $2 \times 2$ matrix. Its two columns are vectors. Those vectors span a
+**parallelogram**. The determinant of the matrix is the **signed area** of that
+parallelogram.
+
+That's the whole idea. Everything else — the formula, the sign, the "singular" case —
+follows from this single picture.
+
+## The parallelogram
+
+Drag the column vectors below. The shaded region is the parallelogram they span, and
+the number on the right is the determinant — updated live.
+
+<DeterminantPlayground2D />
+
+Try a few things:
+
+- **Make the columns perpendicular** (e.g. $\text{col}_1 = (3, 0)$, $\text{col}_2 = (0, 2)$).
+  The parallelogram becomes a rectangle, and the determinant is just width × height.
+- **Make the columns parallel.** The parallelogram collapses to a line — area zero.
+  This is why a matrix with parallel columns has no inverse: it squashes 2D space flat.
+- **Swap the two columns.** The determinant flips sign. The parallelogram has the same
+  shape, but the orientation — the direction you traverse its boundary — reverses.
+
+Toggle **"Show unit square"** in the sidebar. The unit square is what $A$ *starts with*;
+the parallelogram is what $A$ *turns it into*. The determinant tells you the scaling
+factor for area: if $|\det(A)| = 5$, the matrix makes every region five times larger.
+
+## The formula
+
+For a $2 \times 2$ matrix
+
+$$
+A = \begin{bmatrix} a & b \\\\ c & d \end{bmatrix},
+$$
+
+the determinant is:
+
+$$
+\det(A) = ad - bc.
+$$
+
+Where does $ad - bc$ come from? The parallelogram spanned by
+$(a, c)$ and $(b, d)$ has area equal to the absolute value of
+$ad - bc$. You can verify this by computing the area of the bounding
+rectangle and subtracting the triangles and rectangles outside the
+parallelogram — the algebra always simplifies to $|ad - bc|$.
+
+In code:
+
+```ts
+type Mat2 = { a: number; b: number; c: number; d: number };
+
+function det(m: Mat2): number {
+  return m.a * m.d - m.b * m.c;
+}
+```
+
+## What the sign means
+
+The determinant isn't just an area — it's a **signed** area. The sign records
+**orientation**: the order in which the columns sweep around the origin.
+
+- **Positive determinant:** column 1 → column 2 goes counterclockwise. The matrix
+  preserves the "handedness" of shapes — if you draw a clockwise loop, its image
+  under $A$ is still clockwise.
+- **Negative determinant:** column 1 → column 2 goes clockwise. The matrix **reflects**
+  — it flips left and right. A clockwise loop becomes counterclockwise.
+- **Zero determinant:** the columns are parallel. The matrix **collapses** a dimension.
+  No area, no inverse, no going back. This is the definition of a **singular** matrix.
+
+Drag the vectors in the demo above until the determinant crosses zero. Watch the
+parallelogram flatten into a line at the exact moment the sign flips. That transition —
+from invertible to singular — is one of the most important thresholds in linear algebra.
+
+## Determinant as a scaling factor
+
+Here is another way to think about it. A matrix $A$ is a function that takes vectors
+in and sends vectors out. It transforms the entire plane. The determinant tells you:
+
+> **By what factor does $A$ scale areas, and does it flip orientation?**
+
+If $\det(A) = 3$, every shape's area triples. If $\det(A) = -2$, every area doubles
+*and* the shape gets mirrored. If $\det(A) = 0$, every shape gets flattened to a
+lower dimension — all of 2D maps onto a line (or a point).
+
+This extends to higher dimensions. For a $3 \times 3$ matrix, the three columns span
+a **parallelepiped**, and the determinant is its signed volume. For $n \times n$, it's
+the signed $n$-dimensional volume of the parallelotope spanned by the columns.
+
+## Key properties
+
+- **Multiplicative:** $\det(AB) = \det(A)\det(B)$. Applying $A$ then $B$ scales
+  areas by both factors.
+- **Transpose:** $\det(A^T) = \det(A)$. Rows carry the same geometric information
+  as columns.
+- **Inverse:** $\det(A^{-1}) = 1 / \det(A)$. Undoing a ×3 area scaling is a ×⅓
+  scaling.
+- **Swapping two columns** (or rows) flips the sign.
+- **Scaling one column by $k$** multiplies the determinant by $k$.
+
+These aren't arbitrary rules — they're all consequences of "the determinant is signed
+area." Swapping columns reverses orientation; scaling a column stretches the
+parallelogram along that edge.
+
+## What this is teaching you
+
+The determinant answers a single question: **what does this matrix do to area (or
+volume)?** The formula $ad - bc$ is a shortcut to compute the answer, but the
+*meaning* is geometric. Hold on to the parallelogram picture and the properties
+above will never feel like memorisation.
+
+---
+
+*Next up: eigenvectors — the directions a matrix doesn't rotate, only stretches.*

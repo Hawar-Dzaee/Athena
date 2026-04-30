@@ -71,6 +71,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 6,
   },
   {
+    slug: "determinant",
+    topic: "linear-algebra",
+    title: "The determinant, geometrically",
+    blurb:
+      "Drag two column vectors and watch the parallelogram they span — its signed area is the determinant.",
+    status: "ready",
+    minutes: 7,
+  },
+  {
     slug: "playground",
     topic: "pytorch",
     title: "PyTorch Playground",
