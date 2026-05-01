@@ -557,6 +557,12 @@ export function MLPDiagram() {
   const [displayTestLoss, setDisplayTestLoss] = useState<number | null>(null);
   const [training, setTraining] = useState(false);
   const [trainError, setTrainError] = useState<string | null>(null);
+  const [weights, setWeights] = useState<number[][][] | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<{
+    layer: number;
+    from: number;
+    to: number;
+  } | null>(null);
   const [codeWidth, setCodeWidth] = useState(0);
   const showCode = codeWidth > 0;
   const CODE_DEFAULT = 512;
@@ -636,6 +642,11 @@ export function MLPDiagram() {
 
   useEffect(() => stopAnimation, [stopAnimation]);
 
+  useEffect(() => {
+    setWeights(null);
+    setSelectedEdge(null);
+  }, [inputCount, hiddenCount, outputCount]);
+
   function trainBody(epochCount: number) {
     return JSON.stringify({
       dataset,
@@ -662,6 +673,8 @@ export function MLPDiagram() {
     setVisibleCount(0);
     setDisplayLoss(null);
     setDisplayTestLoss(null);
+    setWeights(null);
+    setSelectedEdge(null);
     try {
       const res = await fetch("/api/train", {
         method: "POST",
@@ -674,9 +687,11 @@ export function MLPDiagram() {
         test_loss_curve: number[];
         final_loss: number;
         final_test_loss: number;
+        weights: number[][][];
       };
       setFullCurve(data.loss_curve);
       setFullTestCurve(data.test_loss_curve);
+      setWeights(data.weights);
       animateCurve(data.loss_curve, data.test_loss_curve);
     } catch (err) {
       setTrainError(err instanceof Error ? err.message : "Training failed");
@@ -702,12 +717,14 @@ export function MLPDiagram() {
         test_loss_curve: number[];
         final_loss: number;
         final_test_loss: number;
+        weights: number[][][];
       };
       setFullCurve(data.loss_curve);
       setFullTestCurve(data.test_loss_curve);
       setVisibleCount(data.loss_curve.length);
       setDisplayLoss(data.final_loss);
       setDisplayTestLoss(data.final_test_loss);
+      setWeights(data.weights);
     } catch (err) {
       setTrainError(err instanceof Error ? err.message : "Training failed");
     } finally {
@@ -723,6 +740,8 @@ export function MLPDiagram() {
     setDisplayLoss(null);
     setDisplayTestLoss(null);
     setTrainError(null);
+    setWeights(null);
+    setSelectedEdge(null);
   }
 
   // Derive visible slices for rendering
@@ -737,6 +756,37 @@ export function MLPDiagram() {
   const inputs = neuronPositions(inputCount, inputX);
   const hidden = hiddenCount > 0 ? neuronPositions(hiddenCount, hiddenX) : [];
   const outputs = neuronPositions(outputCount, outputX);
+
+  const maxAbsWeight = useMemo(() => {
+    if (!weights) return 1;
+    let max = 0;
+    for (const mat of weights) {
+      for (const row of mat) {
+        for (const v of row) {
+          const a = Math.abs(v);
+          if (a > max) max = a;
+        }
+      }
+    }
+    return max || 1;
+  }, [weights]);
+
+  function getWeight(layerIdx: number, fromIdx: number, toIdx: number): number | null {
+    if (!weights || !weights[layerIdx]) return null;
+    return weights[layerIdx][toIdx]?.[fromIdx] ?? null;
+  }
+
+  function edgeColor(w: number): string {
+    return w >= 0 ? "#3b82f6" : "#ef4444";
+  }
+
+  function edgeOpacity(w: number): number {
+    return 0.25 + 0.75 * (Math.abs(w) / maxAbsWeight);
+  }
+
+  function edgeWidth(w: number): number {
+    return 1 + 3 * (Math.abs(w) / maxAbsWeight);
+  }
 
   return (
     <>
@@ -947,28 +997,143 @@ export function MLPDiagram() {
         role="img"
         aria-label="Multi-layer perceptron with input, hidden, and output layers"
       >
-        <g stroke="currentColor" className="text-border" strokeWidth={1} fill="none" opacity={0.6}>
+        <g fill="none">
           {hiddenCount > 0 ? (
             <>
               {inputs.map((a, i) =>
-                hidden.map((b, j) => (
-                  <path key={`ih-${i}-${j}`} d={curvePath(a, b)} />
-                )),
+                hidden.map((b, j) => {
+                  const w = getWeight(0, i, j);
+                  const isSelected = selectedEdge?.layer === 0 && selectedEdge.from === i && selectedEdge.to === j;
+                  return (
+                    <g key={`ih-${i}-${j}`}>
+                      <path
+                        d={curvePath(a, b)}
+                        stroke="transparent"
+                        strokeWidth={12}
+                        className="cursor-pointer"
+                        onClick={() => setSelectedEdge(
+                          isSelected ? null : { layer: 0, from: i, to: j }
+                        )}
+                      />
+                      <path
+                        d={curvePath(a, b)}
+                        stroke={w !== null ? edgeColor(w) : "currentColor"}
+                        className={w === null ? "text-border" : undefined}
+                        strokeWidth={w !== null ? edgeWidth(w) : 1}
+                        opacity={isSelected ? 1 : w !== null ? edgeOpacity(w) : 0.6}
+                        pointerEvents="none"
+                      />
+                    </g>
+                  );
+                }),
               )}
               {hidden.map((a, i) =>
-                outputs.map((b, j) => (
-                  <path key={`ho-${i}-${j}`} d={curvePath(a, b)} />
-                )),
+                outputs.map((b, j) => {
+                  const w = getWeight(1, i, j);
+                  const isSelected = selectedEdge?.layer === 1 && selectedEdge.from === i && selectedEdge.to === j;
+                  return (
+                    <g key={`ho-${i}-${j}`}>
+                      <path
+                        d={curvePath(a, b)}
+                        stroke="transparent"
+                        strokeWidth={12}
+                        className="cursor-pointer"
+                        onClick={() => setSelectedEdge(
+                          isSelected ? null : { layer: 1, from: i, to: j }
+                        )}
+                      />
+                      <path
+                        d={curvePath(a, b)}
+                        stroke={w !== null ? edgeColor(w) : "currentColor"}
+                        className={w === null ? "text-border" : undefined}
+                        strokeWidth={w !== null ? edgeWidth(w) : 1}
+                        opacity={isSelected ? 1 : w !== null ? edgeOpacity(w) : 0.6}
+                        pointerEvents="none"
+                      />
+                    </g>
+                  );
+                }),
               )}
             </>
           ) : (
             inputs.map((a, i) =>
-              outputs.map((b, j) => (
-                <path key={`io-${i}-${j}`} d={curvePath(a, b)} />
-              )),
+              outputs.map((b, j) => {
+                const w = getWeight(0, i, j);
+                const isSelected = selectedEdge?.layer === 0 && selectedEdge.from === i && selectedEdge.to === j;
+                return (
+                  <g key={`io-${i}-${j}`}>
+                    <path
+                      d={curvePath(a, b)}
+                      stroke="transparent"
+                      strokeWidth={12}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedEdge(
+                        isSelected ? null : { layer: 0, from: i, to: j }
+                      )}
+                    />
+                    <path
+                      d={curvePath(a, b)}
+                      stroke={w !== null ? edgeColor(w) : "currentColor"}
+                      className={w === null ? "text-border" : undefined}
+                      strokeWidth={w !== null ? edgeWidth(w) : 1}
+                      opacity={isSelected ? 1 : w !== null ? edgeOpacity(w) : 0.6}
+                      pointerEvents="none"
+                    />
+                  </g>
+                );
+              }),
             )
           )}
         </g>
+
+        {/* Weight tooltip */}
+        {selectedEdge && (() => {
+          const w = getWeight(selectedEdge.layer, selectedEdge.from, selectedEdge.to);
+          if (w === null) return null;
+          let fromPos: { x: number; y: number };
+          let toPos: { x: number; y: number };
+          if (hiddenCount > 0) {
+            if (selectedEdge.layer === 0) {
+              fromPos = inputs[selectedEdge.from];
+              toPos = hidden[selectedEdge.to];
+            } else {
+              fromPos = hidden[selectedEdge.from];
+              toPos = outputs[selectedEdge.to];
+            }
+          } else {
+            fromPos = inputs[selectedEdge.from];
+            toPos = outputs[selectedEdge.to];
+          }
+          const mx = (fromPos.x + toPos.x) / 2;
+          const my = (fromPos.y + toPos.y) / 2;
+          const labelW = 60;
+          const labelH = 22;
+          return (
+            <g>
+              <rect
+                x={mx - labelW / 2}
+                y={my - labelH / 2}
+                width={labelW}
+                height={labelH}
+                rx={4}
+                fill={edgeColor(w)}
+                opacity={0.95}
+              />
+              <text
+                x={mx}
+                y={my}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="white"
+                fontSize={11}
+                fontFamily="monospace"
+                fontWeight={600}
+              >
+                {w >= 0 ? "+" : ""}{w.toFixed(3)}
+              </text>
+            </g>
+          );
+        })()}
 
         <g>
           {inputs.map((p, i) => (

@@ -174,11 +174,17 @@ for epoch in range(epochs):
             test_batches += 1
     test_loss_curve.append(test_epoch_loss / max(test_batches, 1))
 
+weights = []
+for m in model:
+    if isinstance(m, nn.Linear):
+        weights.append(m.weight.detach().tolist())
+
 print(json.dumps({
     "loss_curve": train_loss_curve,
     "test_loss_curve": test_loss_curve,
     "final_loss": train_loss_curve[-1],
     "final_test_loss": test_loss_curve[-1],
+    "weights": weights,
 }))
 `;
 }
