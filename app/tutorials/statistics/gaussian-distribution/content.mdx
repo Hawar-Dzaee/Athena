@@ -1,10 +1,29 @@
 import { GaussianPlot } from "./components/GaussianPlot";
+import { HistogramOrigin } from "./components/HistogramOrigin";
 
 # Gaussian Distribution
 
 The **Gaussian** (or **normal**) distribution is the most important distribution in
 statistics. It shows up everywhere: measurement errors, heights of people, pixel
 noise, gradient updates in neural networks.
+
+## Where does the bell curve come from?
+
+Before we write down any formula, let's start with raw data. Imagine you
+measure something — say the height of 50 random people — and tally the results
+into bins. That tally is a **histogram**: the height of each bar tells you how
+many measurements landed in that range.
+
+Try it below. Start with 50 samples, then crank it up to 500 or 5,000. As the
+sample count grows and the bins get narrower, the jagged histogram silhouette
+smooths out into a familiar shape — the **bell curve**. Toggle "Show PDF curve"
+to see how closely the histogram tracks the theoretical Gaussian density.
+
+<HistogramOrigin />
+
+The bell curve is not something we impose on data — it **emerges** from it.
+The Gaussian PDF is simply the mathematical function that describes this
+limiting shape. Let's write it down.
 
 ## The equation
 
