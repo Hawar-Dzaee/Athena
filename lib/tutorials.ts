@@ -89,13 +89,6 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 6,
   },
   {
-    slug: "playground",
-    topic: "pytorch",
-    title: "PyTorch Playground",
-    blurb: "Write and run PyTorch code interactively, notebook-style.",
-    status: "ready",
-  },
-  {
     slug: "transformation",
     topic: "pytorch",
     title: "Transformations",
