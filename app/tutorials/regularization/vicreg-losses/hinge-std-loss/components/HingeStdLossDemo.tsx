@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { codeToHtml } from "shiki";
 import * as d3 from "d3";
 
 interface Point {
@@ -71,6 +72,84 @@ function gaussianSample(rng: () => number): number {
 }
 
 
+function HighlightedCode({ code }: { code: string }) {
+  const [html, setHtml] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    codeToHtml(code, {
+      lang: "python",
+      theme: "one-dark-pro",
+    }).then((result) => {
+      if (!cancelled) setHtml(result);
+    });
+    return () => { cancelled = true; };
+  }, [code]);
+
+  if (!html) {
+    return (
+      <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed text-foreground/90">
+        <code>{code}</code>
+      </pre>
+    );
+  }
+
+  return (
+    <div
+      className="overflow-x-auto [&_pre]:p-4 [&_pre]:text-[13px] [&_pre]:leading-relaxed [&_pre]:bg-transparent!"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label="Copy code to clipboard"
+      className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-foreground/70 transition hover:bg-accent/10 hover:text-foreground"
+    >
+      {copied ? (
+        <>
+          <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Copied
+        </>
+      ) : (
+        <>
+          <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <rect x={9} y={9} width={13} height={13} rx={2} ry={2} />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy
+        </>
+      )}
+    </button>
+  );
+}
+
+const HINGE_STD_CODE = `class HingeStdLoss(torch.nn.Module):
+    def __init__(self, std_margin: float = 1.0):
+        super().__init__()
+        self.std_margin = std_margin
+
+    def forward(self, x: torch.Tensor):
+        x = x - x.mean(dim=0, keepdim=True)
+        std = torch.sqrt(x.var(dim=0) + 0.0001)
+        std_loss = torch.mean(F.relu(self.std_margin - std))
+        return std_loss`;
+
 export function HingeStdLossDemo() {
   const [batchSize, setBatchSize] = useState(10);
   const [points, setPoints] = useState<Point[]>(() => makePoints(42, 4, 10));
@@ -78,6 +157,12 @@ export function HingeStdLossDemo() {
   const [showData, setShowData] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [codeWidth, setCodeWidth] = useState(0);
+  const showCode = codeWidth > 0;
+  const CODE_DEFAULT = 512;
+  const CODE_MIN = 360;
+  const CODE_MAX = typeof window !== "undefined" ? window.innerWidth * 0.8 : 1200;
+  const dragHandleRef = useRef<{ startX: number; startW: number } | null>(null);
 
   const xScale = useMemo(
     () => d3.scaleLinear().domain(DOMAIN).range([M, W - M]),
@@ -388,6 +473,103 @@ export function HingeStdLossDemo() {
           )}
         </div>
       </div>
+
+      {/* Code slider */}
+      {(() => {
+        const code = HINGE_STD_CODE;
+        return (
+          <>
+            <button
+              type="button"
+              onClick={() => setCodeWidth((w) => (w > 0 ? 0 : CODE_DEFAULT))}
+              aria-expanded={showCode}
+              aria-controls="hingestd-code-sidebar"
+              aria-label={showCode ? "Close PyTorch code" : "Show PyTorch code"}
+              className="fixed top-1/2 z-50 flex h-28 w-10 -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-lg border border-r-0 border-border bg-background text-foreground/70 shadow-lg hover:bg-accent/10 hover:text-foreground"
+              style={{ right: showCode ? `${codeWidth}px` : 0 }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width={18}
+                height={18}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+            </button>
+
+            <aside
+              id="hingestd-code-sidebar"
+              className={`fixed top-0 right-0 z-50 flex h-full flex-col border-l border-border bg-background shadow-2xl transition-transform duration-300 ease-in-out ${
+                showCode ? "translate-x-0" : "translate-x-full"
+              }`}
+              style={{ width: `${codeWidth || CODE_DEFAULT}px` }}
+              aria-label="PyTorch code sidebar"
+            >
+              <div
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  dragHandleRef.current = { startX: e.clientX, startW: codeWidth };
+                  const onMove = (ev: MouseEvent) => {
+                    if (!dragHandleRef.current) return;
+                    const delta = dragHandleRef.current.startX - ev.clientX;
+                    const next = Math.min(CODE_MAX, Math.max(CODE_MIN, dragHandleRef.current.startW + delta));
+                    setCodeWidth(next);
+                  };
+                  const onUp = () => {
+                    dragHandleRef.current = null;
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                    document.body.style.cursor = "";
+                    document.body.style.userSelect = "";
+                  };
+                  document.body.style.cursor = "col-resize";
+                  document.body.style.userSelect = "none";
+                  document.addEventListener("mousemove", onMove);
+                  document.addEventListener("mouseup", onUp);
+                }}
+                className="absolute top-0 left-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors"
+                aria-label="Resize sidebar"
+                role="separator"
+              />
+
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium text-foreground">
+                    PyTorch Code
+                  </span>
+                  <span className="text-xs text-foreground/50">
+                    From eb_jepa — HingeStdLoss
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CopyButton text={code} />
+                  <button
+                    type="button"
+                    onClick={() => setCodeWidth(0)}
+                    aria-label="Close sidebar"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-foreground/60 transition hover:bg-accent/10 hover:text-foreground"
+                  >
+                    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <line x1={18} y1={6} x2={6} y2={18} />
+                      <line x1={6} y1={6} x2={18} y2={18} />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                <HighlightedCode code={code} />
+              </div>
+            </aside>
+          </>
+        );
+      })()}
     </figure>
   );
 }

@@ -9,28 +9,7 @@ deviation across the batch. If std drops below a margin $\gamma$, a hinge
 penalty kicks in. This prevents **point collapse** — the failure mode where
 all representations converge to a single constant.
 
-```python
-class HingeStdLoss(torch.nn.Module):
-    def __init__(self, std_margin: float = 1.0):
-        super().__init__()
-        self.std_margin = std_margin
-
-    def forward(self, x: torch.Tensor):
-        x = x - x.mean(dim=0, keepdim=True)
-        std = torch.sqrt(x.var(dim=0) + 0.0001)
-        std_loss = torch.mean(F.relu(self.std_margin - std))
-        return std_loss
-```
-
-**Line by line:**
-
-- `x.var(dim=0)` — variance of each feature across the batch (Bessel-corrected, divides by $N-1$).
-- `+ 0.0001` — numerical guard to avoid $\sqrt{0}$.
-- `F.relu(self.std_margin - std)` — the hinge: zero when $\text{std} \geq \gamma$,
-  positive penalty when below.
-- `torch.mean(...)` — average the per-feature penalties into one scalar.
-
-**Try it:** drag the points to collapse them and watch the loss spike.
+**Try it:** drag the points to collapse them and watch the loss spike. Click the `<>` tab on the right edge to see the source code.
 Use the margin slider to change $\gamma$. Click **Dim 0 only** to see what
 happens when just one dimension collapses while the other stays spread.
 
