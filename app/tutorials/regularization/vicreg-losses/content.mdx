@@ -1,4 +1,5 @@
 import { CovarianceLossDemo } from "./components/CovarianceLossDemo";
+import { CovarianceMatMulDemo } from "./components/CovarianceMatMulDemo";
 import { VICRegLossDemo } from "./components/VICRegLossDemo";
 
 # VICReg Loss Functions — Anatomy
@@ -59,6 +60,36 @@ class CovarianceLoss(torch.nn.Module):
 - `.pow(2).mean()` — square each off-diagonal entry and average. The loss is
   zero only when all off-diagonal covariances are zero — i.e., the features
   are uncorrelated.
+
+### How $x^T \! @ \; x$ builds the covariance matrix
+
+The line `cov = (x.T @ x) / (batch_size - 1)` is where the magic happens.
+This single matrix multiplication produces a $D \times D$ matrix where every
+entry measures the covariance between a pair of feature dimensions across
+the batch:
+
+$$
+\text{cov}[i,j] \;=\; \frac{1}{N-1} \sum_{k=0}^{N-1} x_{\text{centered}}[k,\,i] \;\cdot\; x_{\text{centered}}[k,\,j]
+$$
+
+The **L-shaped layout** below shows how the shapes align: $x^T$ (D×N) sits
+on the left, $x$ (N×D) sits on top, and their product lands in the
+bottom-right as the $D \times D$ covariance matrix. **Hover any cell in cov**
+to see which row of $x^T$ and column of $x$ were dot-producted to compute it.
+
+<CovarianceMatMulDemo />
+
+### Why is off-diagonal covariance a problem?
+
+If $\text{cov}(i, j)$ is large, dimensions $i$ and $j$ move together across
+the batch — they encode **redundant information**. The network has $D$
+output channels but the effective capacity is less than $D$ because some
+channels are copies of each other.
+
+This is **dimensional collapse**: every dimension has healthy variance
+(HingeStdLoss is happy), but they're all saying the same thing.
+CovarianceLoss drives every off-diagonal entry toward zero, forcing each
+dimension to capture something unique.
 
 **Try it:** start with **Correlated** — all points lie near the $y = x$ diagonal,
 so $\text{cov}(0,1)$ is large and the loss is high. Click **Decorrelated** and
