@@ -1,6 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useMemo, useRef, useState } from "react";
+
+const HistogramOrigin3DLazy = dynamic(() => import("./HistogramOrigin3D"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center">
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-500/30 border-t-sky-400" />
+    </div>
+  ),
+});
 
 const WIDTH = 600;
 const HEIGHT = 300;
@@ -27,6 +37,20 @@ function generateSamples(n: number): number[] {
   return out;
 }
 
+function boxMullerPair(): [number, number] {
+  let u = 0,
+    v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  const r = Math.sqrt(-2.0 * Math.log(u));
+  const theta = 2.0 * Math.PI * v;
+  return [r * Math.cos(theta), r * Math.sin(theta)];
+}
+
+function generateSamples2D(n: number): [number, number][] {
+  return Array.from({ length: n }, () => boxMullerPair());
+}
+
 function xScale(x: number): number {
   return PAD.left + ((x - X_MIN) / (X_MAX - X_MIN)) * PLOT_W;
 }
@@ -39,7 +63,11 @@ const SAMPLE_PRESETS = [50, 500, 5000] as const;
 const BIN_COUNTS = [8, 20, 50] as const;
 
 export function HistogramOrigin() {
+  const [is3D, setIs3D] = useState(false);
   const [samples, setSamples] = useState<number[]>(() => generateSamples(50));
+  const [samples2D, setSamples2D] = useState<[number, number][]>(() =>
+    generateSamples2D(50)
+  );
   const [numBins, setNumBins] = useState(20);
   const [showCurve, setShowCurve] = useState(false);
   const seedRef = useRef(0);
@@ -47,7 +75,10 @@ export function HistogramOrigin() {
   const resample = useCallback((n: number) => {
     seedRef.current++;
     setSamples(generateSamples(n));
+    setSamples2D(generateSamples2D(n));
   }, []);
+
+  const currentCount = is3D ? samples2D.length : samples.length;
 
   const { bins, yMaxHist } = useMemo(() => {
     const binWidth = (X_MAX - X_MIN) / numBins;
@@ -111,120 +142,147 @@ export function HistogramOrigin() {
 
   return (
     <div className="my-8 flex flex-col items-center gap-5">
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="w-full max-w-[600px] overflow-visible"
-        role="img"
-        aria-label={`Histogram of ${samples.length} samples from a standard normal distribution with ${numBins} bins`}
-      >
-        {/* histogram bars */}
-        {bins.map((b, i) => (
-          <rect
-            key={i}
-            x={xScale(b.x0) + 0.5}
-            y={yScale(b.density)}
-            width={Math.max(xScale(b.x1) - xScale(b.x0) - 1, 1)}
-            height={Math.max(yScale(0) - yScale(b.density), 0)}
-            className="fill-sky-500/50 stroke-sky-400/70"
-            strokeWidth={0.5}
+      {is3D ? (
+        <div className="h-[400px] w-full max-w-[600px] overflow-hidden rounded-xl bg-[#0b1020]">
+          <HistogramOrigin3DLazy
+            samples={samples2D}
+            numBins={numBins}
+            showCurve={showCurve}
           />
-        ))}
+        </div>
+      ) : (
+        <svg
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className="w-full max-w-[600px] overflow-visible"
+          role="img"
+          aria-label={`Histogram of ${samples.length} samples from a standard normal distribution with ${numBins} bins`}
+        >
+          {/* histogram bars */}
+          {bins.map((b, i) => (
+            <rect
+              key={i}
+              x={xScale(b.x0) + 0.5}
+              y={yScale(b.density)}
+              width={Math.max(xScale(b.x1) - xScale(b.x0) - 1, 1)}
+              height={Math.max(yScale(0) - yScale(b.density), 0)}
+              className="fill-sky-500/50 stroke-sky-400/70"
+              strokeWidth={0.5}
+            />
+          ))}
 
-        {/* theoretical PDF overlay */}
-        {showCurve && (
-          <path
-            d={curvePath}
-            fill="none"
-            className="stroke-emerald-400"
-            strokeWidth={2.5}
-            strokeLinejoin="round"
+          {/* theoretical PDF overlay */}
+          {showCurve && (
+            <path
+              d={curvePath}
+              fill="none"
+              className="stroke-emerald-400"
+              strokeWidth={2.5}
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* axes */}
+          <line
+            x1={PAD.left}
+            x2={PAD.left + PLOT_W}
+            y1={yScale(0)}
+            y2={yScale(0)}
+            className="stroke-foreground/30"
+            strokeWidth={1}
           />
-        )}
+          <line
+            x1={PAD.left}
+            x2={PAD.left}
+            y1={PAD.top}
+            y2={yScale(0)}
+            className="stroke-foreground/30"
+            strokeWidth={1}
+          />
 
-        {/* axes */}
-        <line
-          x1={PAD.left}
-          x2={PAD.left + PLOT_W}
-          y1={yScale(0)}
-          y2={yScale(0)}
-          className="stroke-foreground/30"
-          strokeWidth={1}
-        />
-        <line
-          x1={PAD.left}
-          x2={PAD.left}
-          y1={PAD.top}
-          y2={yScale(0)}
-          className="stroke-foreground/30"
-          strokeWidth={1}
-        />
+          {/* x ticks */}
+          {xTicks.map((x) => (
+            <g key={x}>
+              <line
+                x1={xScale(x)}
+                x2={xScale(x)}
+                y1={yScale(0)}
+                y2={yScale(0) + 6}
+                className="stroke-foreground/40"
+                strokeWidth={1}
+              />
+              <text
+                x={xScale(x)}
+                y={yScale(0) + 20}
+                textAnchor="middle"
+                className="fill-foreground/60 text-[11px]"
+              >
+                {x}
+              </text>
+            </g>
+          ))}
 
-        {/* x ticks */}
-        {xTicks.map((x) => (
-          <g key={x}>
-            <line
-              x1={xScale(x)}
-              x2={xScale(x)}
-              y1={yScale(0)}
-              y2={yScale(0) + 6}
-              className="stroke-foreground/40"
-              strokeWidth={1}
-            />
-            <text
-              x={xScale(x)}
-              y={yScale(0) + 20}
-              textAnchor="middle"
-              className="fill-foreground/60 text-[11px]"
-            >
-              {x}
-            </text>
-          </g>
-        ))}
+          {/* y ticks */}
+          {yTicks.map((y) => (
+            <g key={y}>
+              <line
+                x1={PAD.left - 6}
+                x2={PAD.left}
+                y1={yScale(y)}
+                y2={yScale(y)}
+                className="stroke-foreground/40"
+                strokeWidth={1}
+              />
+              <text
+                x={PAD.left - 10}
+                y={yScale(y) + 4}
+                textAnchor="end"
+                className="fill-foreground/60 text-[11px]"
+              >
+                {y.toFixed(2)}
+              </text>
+            </g>
+          ))}
 
-        {/* y ticks */}
-        {yTicks.map((y) => (
-          <g key={y}>
-            <line
-              x1={PAD.left - 6}
-              x2={PAD.left}
-              y1={yScale(y)}
-              y2={yScale(y)}
-              className="stroke-foreground/40"
-              strokeWidth={1}
-            />
-            <text
-              x={PAD.left - 10}
-              y={yScale(y) + 4}
-              textAnchor="end"
-              className="fill-foreground/60 text-[11px]"
-            >
-              {y.toFixed(2)}
-            </text>
-          </g>
-        ))}
-
-        {/* axis labels */}
-        <text
-          x={PAD.left + PLOT_W / 2}
-          y={HEIGHT - 2}
-          textAnchor="middle"
-          className="fill-foreground/50 text-xs"
-        >
-          x
-        </text>
-        <text
-          x={12}
-          y={PAD.top + PLOT_H / 2}
-          textAnchor="middle"
-          className="fill-foreground/50 text-xs"
-          transform={`rotate(-90, 12, ${PAD.top + PLOT_H / 2})`}
-        >
-          density
-        </text>
-      </svg>
+          {/* axis labels */}
+          <text
+            x={PAD.left + PLOT_W / 2}
+            y={HEIGHT - 2}
+            textAnchor="middle"
+            className="fill-foreground/50 text-xs"
+          >
+            x
+          </text>
+          <text
+            x={12}
+            y={PAD.top + PLOT_H / 2}
+            textAnchor="middle"
+            className="fill-foreground/50 text-xs"
+            transform={`rotate(-90, 12, ${PAD.top + PLOT_H / 2})`}
+          >
+            density
+          </text>
+        </svg>
+      )}
 
       {/* controls */}
       <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-foreground/60">View:</span>
+          {(["2D", "3D"] as const).map((label) => (
+            <button
+              key={label}
+              onClick={() => setIs3D(label === "3D")}
+              className={`rounded-md px-3 py-1 font-mono transition-colors ${
+                (label === "3D") === is3D
+                  ? "bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40"
+                  : "bg-foreground/5 text-foreground/60 hover:bg-foreground/10"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex items-center gap-2">
           <span className="text-foreground/60">Samples:</span>
           {SAMPLE_PRESETS.map((n) => (
@@ -232,7 +290,7 @@ export function HistogramOrigin() {
               key={n}
               onClick={() => resample(n)}
               className={`rounded-md px-3 py-1 font-mono transition-colors ${
-                samples.length === n
+                currentCount === n
                   ? "bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40"
                   : "bg-foreground/5 text-foreground/60 hover:bg-foreground/10"
               }`}
@@ -268,7 +326,9 @@ export function HistogramOrigin() {
             onChange={(e) => setShowCurve(e.target.checked)}
             className="accent-emerald-400"
           />
-          <span className="text-foreground/60">Show PDF curve</span>
+          <span className="text-foreground/60">
+            Show PDF {is3D ? "surface" : "curve"}
+          </span>
         </label>
       </div>
     </div>

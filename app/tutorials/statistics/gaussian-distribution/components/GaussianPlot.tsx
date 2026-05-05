@@ -1,6 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useMemo, useRef, useState } from "react";
+
+const GaussianPlot3DLazy = dynamic(() => import("./GaussianPlot3D"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center">
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-400" />
+    </div>
+  ),
+});
 
 const WIDTH = 600;
 const HEIGHT = 320;
@@ -134,8 +144,11 @@ function YAxisTicks({ yMax }: { yMax: number }) {
 }
 
 export function GaussianPlot() {
+  const [is3D, setIs3D] = useState(false);
   const [mu, setMu] = useState(0);
   const [sigma, setSigma] = useState(1);
+  const [muY, setMuY] = useState(0);
+  const [sigmaY, setSigmaY] = useState(1);
 
   const yMax = useMemo(() => {
     const peak = gaussianPdf(mu, mu, sigma);
@@ -156,101 +169,137 @@ export function GaussianPlot() {
     setSigma(parseFloat(e.target.value));
   }, []);
 
+  const handleMuY = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setMuY(parseFloat(e.target.value));
+  }, []);
+
+  const handleSigmaY = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSigmaY(parseFloat(e.target.value));
+  }, []);
+
   const svgRef = useRef<SVGSVGElement>(null);
 
   return (
     <div className="my-8 flex flex-col items-center gap-6">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="w-full max-w-[600px] overflow-visible"
-        role="img"
-        aria-label={`Gaussian distribution plot with μ=${mu.toFixed(1)} and σ=${sigma.toFixed(1)}`}
-      >
-        {/* grid lines */}
-        {Array.from({ length: 9 }, (_, i) => X_MIN + i * 2).map((x) => (
+      {is3D ? (
+        <div className="h-[400px] w-full max-w-[600px] overflow-hidden rounded-xl bg-[#0b1020]">
+          <GaussianPlot3DLazy
+            muX={mu}
+            muZ={muY}
+            sigmaX={sigma}
+            sigmaZ={sigmaY}
+          />
+        </div>
+      ) : (
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className="w-full max-w-[600px] overflow-visible"
+          role="img"
+          aria-label={`Gaussian distribution plot with μ=${mu.toFixed(1)} and σ=${sigma.toFixed(1)}`}
+        >
+          {/* grid lines */}
+          {Array.from({ length: 9 }, (_, i) => X_MIN + i * 2).map((x) => (
+            <line
+              key={`gx-${x}`}
+              x1={xScale(x)}
+              x2={xScale(x)}
+              y1={PAD.top}
+              y2={yScale(0, yMax)}
+              className="stroke-foreground/[0.06]"
+              strokeWidth={1}
+            />
+          ))}
+
+          {/* σ bands — rendered outermost first so inner bands layer on top */}
+          {BANDS.map((b, i) => (
+            <path key={b.n} d={bandPaths[i]} className={b.fill} />
+          ))}
+
+          {/* curve */}
+          <path
+            d={curvePath}
+            fill="none"
+            className="stroke-emerald-400"
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+          />
+
+          {/* mean line */}
           <line
-            key={`gx-${x}`}
-            x1={xScale(x)}
-            x2={xScale(x)}
-            y1={PAD.top}
+            x1={xScale(mu)}
+            x2={xScale(mu)}
+            y1={yScale(gaussianPdf(mu, mu, sigma), yMax)}
             y2={yScale(0, yMax)}
-            className="stroke-foreground/[0.06]"
+            className="stroke-amber-400"
+            strokeWidth={1.5}
+            strokeDasharray="6 4"
+          />
+
+          {/* axes */}
+          <line
+            x1={PAD.left}
+            x2={PAD.left + PLOT_W}
+            y1={yScale(0, yMax)}
+            y2={yScale(0, yMax)}
+            className="stroke-foreground/30"
             strokeWidth={1}
           />
+          <line
+            x1={PAD.left}
+            x2={PAD.left}
+            y1={PAD.top}
+            y2={yScale(0, yMax)}
+            className="stroke-foreground/30"
+            strokeWidth={1}
+          />
+
+          <XAxisTicks yMax={yMax} />
+          <YAxisTicks yMax={yMax} />
+
+          {/* axis labels */}
+          <text
+            x={PAD.left + PLOT_W / 2}
+            y={HEIGHT - 2}
+            textAnchor="middle"
+            className="fill-foreground/50 text-xs"
+          >
+            x
+          </text>
+          <text
+            x={12}
+            y={PAD.top + PLOT_H / 2}
+            textAnchor="middle"
+            className="fill-foreground/50 text-xs"
+            transform={`rotate(-90, 12, ${PAD.top + PLOT_H / 2})`}
+          >
+            f(x)
+          </text>
+        </svg>
+      )}
+
+      {/* view toggle */}
+      <div className="flex items-center gap-2">
+        {(["2D", "3D"] as const).map((label) => (
+          <button
+            key={label}
+            onClick={() => setIs3D(label === "3D")}
+            className={`rounded-md px-3 py-1 font-mono text-sm transition-colors ${
+              (label === "3D") === is3D
+                ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40"
+                : "bg-foreground/5 text-foreground/60 hover:bg-foreground/10"
+            }`}
+          >
+            {label}
+          </button>
         ))}
-
-        {/* σ bands — rendered outermost first so inner bands layer on top */}
-        {BANDS.map((b, i) => (
-          <path key={b.n} d={bandPaths[i]} className={b.fill} />
-        ))}
-
-        {/* curve */}
-        <path
-          d={curvePath}
-          fill="none"
-          className="stroke-emerald-400"
-          strokeWidth={2.5}
-          strokeLinejoin="round"
-        />
-
-        {/* mean line */}
-        <line
-          x1={xScale(mu)}
-          x2={xScale(mu)}
-          y1={yScale(gaussianPdf(mu, mu, sigma), yMax)}
-          y2={yScale(0, yMax)}
-          className="stroke-amber-400"
-          strokeWidth={1.5}
-          strokeDasharray="6 4"
-        />
-
-        {/* axes */}
-        <line
-          x1={PAD.left}
-          x2={PAD.left + PLOT_W}
-          y1={yScale(0, yMax)}
-          y2={yScale(0, yMax)}
-          className="stroke-foreground/30"
-          strokeWidth={1}
-        />
-        <line
-          x1={PAD.left}
-          x2={PAD.left}
-          y1={PAD.top}
-          y2={yScale(0, yMax)}
-          className="stroke-foreground/30"
-          strokeWidth={1}
-        />
-
-        <XAxisTicks yMax={yMax} />
-        <YAxisTicks yMax={yMax} />
-
-        {/* axis labels */}
-        <text
-          x={PAD.left + PLOT_W / 2}
-          y={HEIGHT - 2}
-          textAnchor="middle"
-          className="fill-foreground/50 text-xs"
-        >
-          x
-        </text>
-        <text
-          x={12}
-          y={PAD.top + PLOT_H / 2}
-          textAnchor="middle"
-          className="fill-foreground/50 text-xs"
-          transform={`rotate(-90, 12, ${PAD.top + PLOT_H / 2})`}
-        >
-          f(x)
-        </text>
-      </svg>
+      </div>
 
       {/* controls */}
       <div className="flex flex-wrap justify-center gap-8">
         <label className="flex flex-col items-center gap-1">
           <span className="text-sm font-medium text-foreground/70">
-            μ = {mu.toFixed(1)}
+            {is3D ? <>μ<sub>x</sub></> : "μ"} = {mu.toFixed(1)}
           </span>
           <input
             type="range"
@@ -260,12 +309,12 @@ export function GaussianPlot() {
             value={mu}
             onChange={handleMu}
             className="w-48 accent-amber-400"
-            aria-label="Mean (μ)"
+            aria-label={is3D ? "Mean X (μx)" : "Mean (μ)"}
           />
         </label>
         <label className="flex flex-col items-center gap-1">
           <span className="text-sm font-medium text-foreground/70">
-            σ = {sigma.toFixed(1)}
+            {is3D ? <>σ<sub>x</sub></> : "σ"} = {sigma.toFixed(1)}
           </span>
           <input
             type="range"
@@ -275,24 +324,60 @@ export function GaussianPlot() {
             value={sigma}
             onChange={handleSigma}
             className="w-48 accent-emerald-400"
-            aria-label="Standard deviation (σ)"
+            aria-label={is3D ? "Standard deviation X (σx)" : "Standard deviation (σ)"}
           />
         </label>
+        {is3D && (
+          <>
+            <label className="flex flex-col items-center gap-1">
+              <span className="text-sm font-medium text-foreground/70">
+                μ<sub>y</sub> = {muY.toFixed(1)}
+              </span>
+              <input
+                type="range"
+                min={-5}
+                max={5}
+                step={0.1}
+                value={muY}
+                onChange={handleMuY}
+                className="w-48 accent-amber-400"
+                aria-label="Mean Y (μy)"
+              />
+            </label>
+            <label className="flex flex-col items-center gap-1">
+              <span className="text-sm font-medium text-foreground/70">
+                σ<sub>y</sub> = {sigmaY.toFixed(1)}
+              </span>
+              <input
+                type="range"
+                min={0.3}
+                max={4}
+                step={0.1}
+                value={sigmaY}
+                onChange={handleSigmaY}
+                className="w-48 accent-emerald-400"
+                aria-label="Standard deviation Y (σy)"
+              />
+            </label>
+          </>
+        )}
       </div>
 
       {/* legend */}
-      <div className="flex flex-wrap justify-center gap-4 text-sm text-foreground/60">
-        {[...BANDS].reverse().map((b) => (
-          <span key={b.n} className="flex items-center gap-1.5">
-            <span className={`inline-block h-3 w-3 rounded-sm ${b.color}`} />
-            {b.label}
+      {!is3D && (
+        <div className="flex flex-wrap justify-center gap-4 text-sm text-foreground/60">
+          {[...BANDS].reverse().map((b) => (
+            <span key={b.n} className="flex items-center gap-1.5">
+              <span className={`inline-block h-3 w-3 rounded-sm ${b.color}`} />
+              {b.label}
+            </span>
+          ))}
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-0.5 w-3 bg-amber-400" style={{ borderTop: "2px dashed" }} />
+            mean
           </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-3 bg-amber-400" style={{ borderTop: "2px dashed" }} />
-          mean
-        </span>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
