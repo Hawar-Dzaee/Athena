@@ -1,0 +1,130 @@
+import { ProjectionPlayground2D } from "./components/ProjectionPlayground2D";
+import { ProjectionScene3D } from "./components/ProjectionScene3D";
+
+# Projection, geometrically
+
+Imagine shining a flashlight straight down onto a line. The shadow of a vector
+on that line is its **projection**. Projection answers the question: *how much of
+one vector goes in the direction of another?*
+
+Drag the tips of $\mathbf{a}$ (indigo) and $\mathbf{b}$ (rose) below. The
+emerald arrow is the projection of $\mathbf{a}$ onto $\mathbf{b}$, and the
+amber arrow is the **residual** — the leftover part.
+
+<ProjectionPlayground2D />
+
+Notice the right-angle marker where the residual meets $\mathbf{b}$. That's the
+whole point: projection splits $\mathbf{a}$ into two pieces — one that lies
+*along* $\mathbf{b}$ and one that's *perpendicular* to it.
+
+## The formula
+
+The projection of $\mathbf{a}$ onto $\mathbf{b}$ is:
+
+$$
+\text{proj}_{\mathbf{b}}(\mathbf{a})
+= \frac{\mathbf{a} \cdot \mathbf{b}}{\mathbf{b} \cdot \mathbf{b}} \, \mathbf{b}
+$$
+
+Let's unpack this piece by piece:
+
+1. **$\mathbf{a} \cdot \mathbf{b}$** — the dot product measures how much $\mathbf{a}$ and $\mathbf{b}$ "agree" in direction.
+2. **$\mathbf{b} \cdot \mathbf{b} = \|\mathbf{b}\|^2$** — we divide by the squared length of $\mathbf{b}$ to normalize.
+3. **The ratio $\frac{\mathbf{a} \cdot \mathbf{b}}{\mathbf{b} \cdot \mathbf{b}}$** — this is a *scalar* that tells you how many copies of $\mathbf{b}$ you need to reach the shadow.
+4. **Multiply by $\mathbf{b}$** — scale $\mathbf{b}$ by that amount to get the actual projected vector.
+
+If $\mathbf{b}$ is a **unit vector** ($\|\mathbf{b}\| = 1$), the formula simplifies to:
+
+$$
+\text{proj}_{\hat{\mathbf{b}}}(\mathbf{a}) = (\mathbf{a} \cdot \hat{\mathbf{b}}) \, \hat{\mathbf{b}}
+$$
+
+because $\hat{\mathbf{b}} \cdot \hat{\mathbf{b}} = 1$.
+
+## Why the right angle?
+
+The **residual** (or error) vector is:
+
+$$
+\mathbf{r} = \mathbf{a} - \text{proj}_{\mathbf{b}}(\mathbf{a})
+$$
+
+We can verify it's perpendicular to $\mathbf{b}$ by taking the dot product:
+
+$$
+\mathbf{r} \cdot \mathbf{b}
+= \left(\mathbf{a} - \frac{\mathbf{a} \cdot \mathbf{b}}{\mathbf{b} \cdot \mathbf{b}} \mathbf{b}\right) \cdot \mathbf{b}
+= \mathbf{a} \cdot \mathbf{b} - \frac{\mathbf{a} \cdot \mathbf{b}}{\mathbf{b} \cdot \mathbf{b}} (\mathbf{b} \cdot \mathbf{b})
+= 0
+$$
+
+Zero. Always. This is the defining property of projection: among all
+vectors on the line through $\mathbf{b}$, the projection is the one that makes
+the residual shortest — the *closest point* on the line to the tip of
+$\mathbf{a}$.
+
+## The component view
+
+In coordinates, with $\mathbf{a} = (a_x, a_y)$ and $\mathbf{b} = (b_x, b_y)$:
+
+$$
+\text{proj}_{\mathbf{b}}(\mathbf{a})
+= \frac{a_x b_x + a_y b_y}{b_x^2 + b_y^2}
+\begin{bmatrix} b_x \\\\ b_y \end{bmatrix}
+$$
+
+In code:
+
+```ts
+type Vec2 = { x: number; y: number };
+
+function dot(a: Vec2, b: Vec2): number {
+  return a.x * b.x + a.y * b.y;
+}
+
+function proj(a: Vec2, b: Vec2): Vec2 {
+  const scalar = dot(a, b) / dot(b, b);
+  return { x: scalar * b.x, y: scalar * b.y };
+}
+```
+
+## In three dimensions
+
+The formula is identical — the dot product just picks up a third term. Use
+the sliders to change $\mathbf{a}$ and $\mathbf{b}$, and orbit the camera to
+see the right angle from every direction.
+
+<ProjectionScene3D />
+
+The residual (amber, labeled **r**) sticks straight out from the line through
+$\mathbf{b}$. Rotate until you're looking down the line — the residual will
+point directly at you, confirming it's perpendicular.
+
+## Where projection shows up
+
+Projection isn't just a textbook exercise. It's a load-bearing operation in
+applied math and ML:
+
+- **Least squares regression** — fitting a line through data is projecting the
+  target vector onto the column space of the design matrix.
+- **Gram–Schmidt** — building an orthogonal basis works by repeatedly
+  projecting out the components you've already accounted for.
+- **PCA** — principal component analysis projects data onto the directions
+  of maximum variance.
+- **Attention in Transformers** — query–key dot products are projections that
+  decide which values to attend to.
+
+In every case, the idea is the same: decompose a vector into a part you
+care about and a part you don't.
+
+## What this is teaching you
+
+Projection is the first operation in linear algebra where the **dot product
+stops being just a number** and starts being a geometric tool. The dot product
+tells you "how much of $\mathbf{a}$ is in the $\mathbf{b}$ direction" — and
+projection makes that vague statement precise.
+
+---
+
+*Next up: the Gram–Schmidt process — building an entire orthogonal basis
+by repeated projection.*

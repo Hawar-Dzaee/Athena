@@ -196,6 +196,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 6,
   },
+  {
+    slug: "projection",
+    topic: "linear-algebra",
+    title: "Projection, geometrically",
+    blurb:
+      "Drag two vectors and watch one cast a shadow onto the other — the dot product does the work.",
+    status: "ready",
+    minutes: 7,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {
