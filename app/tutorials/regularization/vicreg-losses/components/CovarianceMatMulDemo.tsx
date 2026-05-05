@@ -22,8 +22,8 @@ function gaussianSample(rng: () => number) {
 type Preset = "correlated" | "decorrelated" | "anti-corr";
 
 export function CovarianceMatMulDemo() {
-  const [n, setN] = useState(8);
-  const [d, setD] = useState(5);
+  const [n, setN] = useState(6);
+  const [d, setD] = useState(4);
   const [preset, setPreset] = useState<Preset>("correlated");
   const [hovered, setHovered] = useState<{ i: number; j: number } | null>(null);
 
@@ -106,9 +106,9 @@ export function CovarianceMatMulDemo() {
     return (v: number) => interp((v / scaleMaxCov + 1) / 2);
   }, [scaleMaxCov]);
 
-  const cs = Math.max(20, Math.min(32, Math.floor(280 / Math.max(n, d))));
-  const pad = 48;
-  const gap = 16;
+  const cs = Math.max(18, Math.min(26, Math.floor(220 / Math.max(n, d))));
+  const pad = 40;
+  const gap = 12;
 
   const xOx = pad + n * cs + gap;
   const xOy = pad;
@@ -120,8 +120,8 @@ export function CovarianceMatMulDemo() {
   const barGap = 14;
   const barW = 10;
   const barX = covOx + d * cs + barGap;
-  const svgW = barX + barW + 44;
-  const svgH = covOy + d * cs + 24;
+  const svgW = barX + barW + 32;
+  const svgH = covOy + d * cs + 22;
 
   const emptyCenter = { x: pad + (n * cs) / 2, y: pad + (n * cs) / 2 };
 
@@ -219,7 +219,7 @@ export function CovarianceMatMulDemo() {
 
       {/* L-shaped matrix multiplication SVG */}
       <div
-        className="overflow-x-auto rounded-2xl border border-[var(--color-border)] bg-[#1e1e2e] p-4"
+        className="max-w-[50%] overflow-x-auto rounded-2xl border border-[var(--color-border)] bg-[#1e1e2e] p-4"
       >
         <svg
           viewBox={`0 0 ${svgW} ${svgH}`}
