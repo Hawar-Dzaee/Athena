@@ -1,5 +1,6 @@
 import { GaussianPlot } from "./components/GaussianPlot";
 import { HistogramOrigin } from "./components/HistogramOrigin";
+import { IsotropicGaussian } from "./components/IsotropicGaussian";
 
 # Gaussian Distribution
 
@@ -31,3 +32,34 @@ Two parameters control everything:
 
 
 <GaussianPlot />
+
+
+## The isotropic Gaussian
+
+The interactive plot above already shows a bivariate Gaussian — switch to 3D
+and notice that each axis gets its own spread $\sigma_x$ and $\sigma_y$.
+The full distribution is described by a **covariance matrix**:
+
+$$
+\Sigma = \begin{bmatrix} \sigma_x^2 & 0 \\ 0 & \sigma_y^2 \end{bmatrix}
+$$
+
+A multivariate Gaussian is **isotropic** when every dimension shares the same
+variance and there are no correlations:
+
+$$
+\Sigma = \sigma^2 \, \mathbf{I}
+$$
+
+One scalar $\sigma$ replaces the entire matrix. The PDF simplifies to:
+
+$$
+f(\mathbf{x}) = \frac{1}{(2\pi\sigma^2)^{d/2}} \, \exp\!\left(-\frac{\|\mathbf{x} - \boldsymbol{\mu}\|^2}{2\sigma^2}\right)
+$$
+
+$f$ depends only on the **distance** $\|\mathbf{x} - \boldsymbol{\mu}\|$ from the
+mean — not on direction. Contours of equal probability are perfect circles in 2D
+(spheres in 3D). Toggle between **Isotropic** and **Anisotropic** to watch circles
+squash into ellipses:
+
+<IsotropicGaussian />

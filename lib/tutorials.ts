@@ -174,9 +174,9 @@ export const TUTORIALS: Tutorial[] = [
     topic: "statistics",
     title: "Gaussian Distribution",
     blurb:
-      "The bell curve explained — its equation, its parameters, and an interactive plot you can reshape by dragging μ and σ.",
+      "The bell curve explained — its equation, its parameters, the isotropic special case, and interactive plots you can reshape.",
     status: "ready",
-    minutes: 5,
+    minutes: 8,
   },
   {
     slug: "warmup-cosine-scheduler",
