@@ -6,7 +6,7 @@
  * which keeps the landing page in sync without scanning the filesystem.
  */
 
-export type Topic = "linear-algebra" | "statistics" | "probability" | "deep-learning" | "pytorch" | "regularization" | "optimizer";
+export type Topic = "linear-algebra" | "statistics" | "probability" | "deep-learning" | "pytorch" | "regularization" | "optimizer" | "math";
 
 export type TutorialStatus = "ready" | "wip" | "planned";
 
@@ -57,6 +57,11 @@ export const TOPICS: Record<Topic, { label: string; description: string; accent:
     label: "Probability",
     description: "Sample spaces, conditional reasoning, Bayes.",
     accent: "from-amber-500 to-orange-500",
+  },
+  math: {
+    label: "Math",
+    description: "Foundational tools — transforms, series, core machinery.",
+    accent: "from-sky-500 to-blue-500",
   },
 };
 
@@ -204,6 +209,15 @@ export const TUTORIALS: Tutorial[] = [
       "Drag two vectors and watch one cast a shadow onto the other — the dot product does the work.",
     status: "ready",
     minutes: 7,
+  },
+  {
+    slug: "fourier-transform",
+    topic: "math",
+    title: "The Fourier Transform",
+    blurb:
+      "Decompose a signal into frequencies — watch the cos and sin integrals cancel or reinforce as you sweep ω.",
+    status: "ready",
+    minutes: 10,
   },
 ];
 

@@ -1,0 +1,51 @@
+import { FourierExplorer } from "./components/FourierExplorer";
+
+# The Fourier Transform
+
+The Fourier transform decomposes a signal $f(t)$ into its constituent frequencies.
+At its heart is Euler's formula:
+
+$$
+e^{-i\omega t} = \cos(\omega t) - i\sin(\omega t)
+$$
+
+The transform "probes" a signal at frequency $\omega$ by multiplying and integrating:
+
+$$
+F(\omega) = \int_{-\infty}^{\infty} f(t) \, e^{-i\omega t} \, dt
+$$
+
+Expanding Euler's formula splits this into a **real** and **imaginary** part:
+
+$$
+F(\omega)
+= \underbrace{\int f(t)\cos(\omega t)\,dt}_{\text{Real part}}
+\;-\; i\underbrace{\int f(t)\sin(\omega t)\,dt}_{\text{Imaginary part}}
+$$
+
+The **magnitude** tells us how strongly frequency $\omega$ is present in the signal:
+
+$$
+|F(\omega)| = \sqrt{\operatorname{Re}^2 + \operatorname{Im}^2}
+$$
+
+## Explore it
+
+Pick a signal, choose a frequency $\omega$, and watch the decomposition in real time.
+The **shaded areas** in the two plots _are_ the integrals — the real and imaginary parts of $F(\omega)$.
+When positive and negative areas cancel, that frequency is weak.
+When they reinforce, that frequency is strong.
+
+<FourierExplorer />
+
+### What to try
+
+- **cos(3t)** — Set $\omega = 3$ and watch the cosine plot lock in phase: all positive area, no cancellation. Slide $\omega$ away and watch the area shrink as positive and negative parts cancel out.
+
+- **cos(2t) + 0.5·cos(7t)** — The spectrum reveals both frequencies. The peak at $\omega = 7$ is half the height of the one at $\omega = 2$, matching the 0.5 coefficient.
+
+- **Gaussian pulse** — A narrow pulse in time produces a wide spectrum (and vice versa). This is the uncertainty principle at work. Try increasing T to see the spectrum converge.
+
+- **Rectangular pulse** — Sharp edges create a sinc pattern with ripples that never fully die out. Compare this to the smooth Gaussian spectrum.
+
+- **Decaying exponential** — No sharp edges means no ripples. The spectrum is a smooth Lorentzian bell curve.
