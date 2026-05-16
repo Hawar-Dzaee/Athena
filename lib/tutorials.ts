@@ -219,6 +219,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 10,
   },
+  {
+    slug: "discrete-fourier-transform",
+    topic: "math",
+    title: "Discrete Fourier Transform (DFT)",
+    blurb:
+      "Decompose a discrete signal into frequency bins — watch the sum terms cancel or reinforce as you sweep k.",
+    status: "ready",
+    minutes: 10,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {

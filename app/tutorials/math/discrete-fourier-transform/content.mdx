@@ -1,0 +1,45 @@
+import { DFTExplorer } from "./components/DFTExplorer";
+
+# Discrete Fourier Transform (DFT)
+
+The DFT takes $N$ samples and decomposes them into $N$ frequency bins.
+Where the [continuous Fourier transform](/tutorials/math/fourier-transform) integrates over all time, the DFT sums over finite samples:
+
+$$
+X[k] = \sum_{n=0}^{N{-}1} x[n] \, e^{-i\,2\pi k n / N}
+\qquad k = 0, 1, \dots, N{-}1
+$$
+
+Expanding Euler's formula splits each bin into real and imaginary parts — the same decomposition as the continuous case, but with sums instead of integrals:
+
+$$
+X[k]
+= \underbrace{\sum_{n=0}^{N{-}1} x[n]\cos\!\bigl(\tfrac{2\pi k n}{N}\bigr)}_{\text{Real part}}
+\;-\; i\underbrace{\sum_{n=0}^{N{-}1} x[n]\sin\!\bigl(\tfrac{2\pi k n}{N}\bigr)}_{\text{Imaginary part}}
+$$
+
+The magnitude tells us how strongly frequency bin $k$ is present:
+
+$$
+|X[k]| = \sqrt{\operatorname{Re}^2 + \operatorname{Im}^2}
+$$
+
+## Explore it
+
+Pick a signal, choose a frequency bin $k$, and watch the decomposition sample by sample.
+Each **stem** is one term of the sum — when positive and negative terms cancel, that frequency is weak.
+When they reinforce, that frequency is strong.
+
+<DFTExplorer />
+
+### What to try
+
+- **cos(2π·3n/N)** — Set $k = 3$ and watch every stem point the same way: perfect reinforcement. Move $k$ away and watch the stems scatter and cancel.
+
+- **Two cosines** — The spectrum shows peaks at $k = 2$ and $k = 7$. The second peak is half the height, matching the 0.5 coefficient.
+
+- **Impulse δ[n]** — Only $x[0] = 1$, so each sum has just one nonzero term. The spectrum is perfectly flat — every frequency is equally present in an impulse.
+
+- **Rectangular window** — Sharp edges create a sinc-like pattern with sidelobes. Try increasing $N$ and watch the lobes tighten.
+
+- **Exponential decay** — Smooth roll-off gives a smooth spectrum. No sharp edges means no ringing.
