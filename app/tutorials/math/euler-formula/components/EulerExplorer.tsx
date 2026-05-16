@@ -5,62 +5,79 @@ import { useState, useRef, useCallback, useEffect } from "react";
 const TAU = 2 * Math.PI;
 const SIZE = 360;
 const CENTER = SIZE / 2;
-const RADIUS = 140;
+const BASE_RADIUS = 140;
 
-interface Preset {
+interface FormulaPreset {
   label: string;
-  latex: string;
   coeff: number;
   thetaMax: number;
   thetaLabel: string;
 }
 
-const PRESETS: Preset[] = [
+interface ConstantPreset {
+  label: string;
+  magnitude: number;
+  phase: number;
+  description: string;
+}
+
+const FORMULAS: FormulaPreset[] = [
+  { label: "e^(iθ)", coeff: 1, thetaMax: TAU, thetaLabel: "θ ∈ [0, 2π]" },
+  { label: "e^(2πiθ)", coeff: TAU, thetaMax: 1, thetaLabel: "θ ∈ [0, 1]" },
+  { label: "e^(2iθ)", coeff: 2, thetaMax: TAU, thetaLabel: "θ ∈ [0, 2π]" },
+  { label: "e^(3iθ)", coeff: 3, thetaMax: TAU, thetaLabel: "θ ∈ [0, 2π]" },
+];
+
+const CONSTANTS: ConstantPreset[] = [
+  { label: "1", magnitude: 1, phase: 0, description: "no change" },
+  { label: "2", magnitude: 2, phase: 0, description: "radius × 2" },
+  { label: "0.5", magnitude: 0.5, phase: 0, description: "radius × 0.5" },
   {
-    label: "e^(iθ)",
-    latex: "e^{i\\theta}",
-    coeff: 1,
-    thetaMax: TAU,
-    thetaLabel: "θ ∈ [0, 2π]",
+    label: "e^(iπ/4)",
+    magnitude: 1,
+    phase: Math.PI / 4,
+    description: "rotate 45°",
   },
   {
-    label: "e^(2πiθ)",
-    latex: "e^{2\\pi i\\theta}",
-    coeff: TAU,
-    thetaMax: 1,
-    thetaLabel: "θ ∈ [0, 1]",
+    label: "e^(iπ/2)",
+    magnitude: 1,
+    phase: Math.PI / 2,
+    description: "rotate 90°",
   },
   {
-    label: "e^(2iθ)",
-    latex: "e^{2i\\theta}",
-    coeff: 2,
-    thetaMax: TAU,
-    thetaLabel: "θ ∈ [0, 2π]",
+    label: "e^(iπ)",
+    magnitude: 1,
+    phase: Math.PI,
+    description: "rotate 180°",
   },
   {
-    label: "e^(3iθ)",
-    latex: "e^{3i\\theta}",
-    coeff: 3,
-    thetaMax: TAU,
-    thetaLabel: "θ ∈ [0, 2π]",
+    label: "2·e^(iπ/4)",
+    magnitude: 2,
+    phase: Math.PI / 4,
+    description: "scale + rotate 45°",
   },
 ];
 
 export function EulerExplorer() {
-  const [presetIdx, setPresetIdx] = useState(0);
+  const [formulaIdx, setFormulaIdx] = useState(0);
+  const [constantIdx, setConstantIdx] = useState(0);
   const [theta, setTheta] = useState(0);
   const [playing, setPlaying] = useState(false);
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const trailRef = useRef<{ x: number; y: number }[]>([]);
 
-  const preset = PRESETS[presetIdx];
-  const angle = preset.coeff * theta;
-  const cosVal = Math.cos(angle);
-  const sinVal = Math.sin(angle);
+  const formula = FORMULAS[formulaIdx];
+  const constant = CONSTANTS[constantIdx];
 
-  const px = CENTER + RADIUS * cosVal;
-  const py = CENTER - RADIUS * sinVal;
+  const angle = formula.coeff * theta + constant.phase;
+  const r = constant.magnitude;
+  const cosVal = r * Math.cos(angle);
+  const sinVal = r * Math.sin(angle);
+
+  const scale = BASE_RADIUS / Math.max(r, 1);
+  const px = CENTER + scale * cosVal;
+  const py = CENTER - scale * sinVal;
 
   if (playing || trailRef.current.length > 0) {
     const last = trailRef.current[trailRef.current.length - 1];
@@ -78,18 +95,18 @@ export function EulerExplorer() {
       lastTimeRef.current = time;
 
       setTheta((prev) => {
-        const speed = preset.thetaMax / 4;
+        const speed = formula.thetaMax / 4;
         const next = prev + dt * speed;
-        if (next >= preset.thetaMax) {
+        if (next >= formula.thetaMax) {
           setPlaying(false);
-          return preset.thetaMax;
+          return formula.thetaMax;
         }
         return next;
       });
 
       rafRef.current = requestAnimationFrame(animate);
     },
-    [preset.thetaMax]
+    [formula.thetaMax]
   );
 
   useEffect(() => {
@@ -111,11 +128,18 @@ export function EulerExplorer() {
     setPlaying(true);
   }
 
-  function handlePresetChange(idx: number) {
+  function handleFormulaChange(idx: number) {
     setPlaying(false);
     trailRef.current = [];
     setTheta(0);
-    setPresetIdx(idx);
+    setFormulaIdx(idx);
+  }
+
+  function handleConstantChange(idx: number) {
+    setPlaying(false);
+    trailRef.current = [];
+    setTheta(0);
+    setConstantIdx(idx);
   }
 
   function handleSliderChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -129,7 +153,7 @@ export function EulerExplorer() {
     if (!isNaN(val)) {
       setPlaying(false);
       trailRef.current = [];
-      setTheta(Math.max(0, Math.min(preset.thetaMax, val)));
+      setTheta(Math.max(0, Math.min(formula.thetaMax, val)));
     }
   }
 
@@ -142,32 +166,63 @@ export function EulerExplorer() {
           .join(" ")
       : "";
 
+  const circleRadius = scale * r;
   const effectiveAngle = angle % TAU;
 
   return (
     <div className="flex flex-col items-center gap-6 my-8">
       {/* Formula selector */}
-      <div className="flex flex-wrap justify-center gap-2">
-        {PRESETS.map((p, i) => (
-          <button
-            key={p.label}
-            onClick={() => handlePresetChange(i)}
-            className={`px-3 py-1.5 rounded-md text-sm font-mono transition-colors ${
-              i === presetIdx
-                ? "bg-[#38bdf8] text-[#0f172a] font-semibold"
-                : "bg-foreground/10 text-foreground/70 hover:bg-foreground/20"
-            }`}
-            aria-label={`Select formula ${p.label}`}
-          >
-            {p.label}
-          </button>
-        ))}
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-xs text-foreground/50 uppercase tracking-wide">
+          Formula
+        </span>
+        <div className="flex flex-wrap justify-center gap-2">
+          {FORMULAS.map((f, i) => (
+            <button
+              key={f.label}
+              onClick={() => handleFormulaChange(i)}
+              className={`px-3 py-1.5 rounded-md text-sm font-mono transition-colors ${
+                i === formulaIdx
+                  ? "bg-[#38bdf8] text-[#0f172a] font-semibold"
+                  : "bg-foreground/10 text-foreground/70 hover:bg-foreground/20"
+              }`}
+              aria-label={`Select formula ${f.label}`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Constant selector */}
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-xs text-foreground/50 uppercase tracking-wide">
+          Constant c
+        </span>
+        <div className="flex flex-wrap justify-center gap-2">
+          {CONSTANTS.map((c, i) => (
+            <button
+              key={c.label}
+              onClick={() => handleConstantChange(i)}
+              className={`px-3 py-1.5 rounded-md text-sm font-mono transition-colors ${
+                i === constantIdx
+                  ? "bg-[#facc15] text-[#0f172a] font-semibold"
+                  : "bg-foreground/10 text-foreground/70 hover:bg-foreground/20"
+              }`}
+              aria-label={`Select constant ${c.label}`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-foreground/40 font-mono">
+          c = {constant.label} → {constant.description}
+        </span>
       </div>
 
       {/* Range hint */}
       <p className="text-xs text-foreground/50 font-mono -mt-3">
-        {preset.thetaLabel}
-        {preset.coeff !== 1 && " — completes " + (preset.coeff === TAU ? "1 full circle" : `${preset.coeff} revolution${preset.coeff > 1 ? "s" : ""}`)}
+        {constant.label} · {formula.label}, {formula.thetaLabel}
       </p>
 
       {/* Unit circle SVG */}
@@ -176,7 +231,7 @@ export function EulerExplorer() {
         height={SIZE}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         className="border border-border rounded-lg bg-[#1e1e2e]"
-        aria-label={`Unit circle showing ${preset.label} as a point`}
+        aria-label={`Complex plane showing ${constant.label} · ${formula.label}`}
       >
         {/* Axes */}
         <line
@@ -198,11 +253,23 @@ export function EulerExplorer() {
           strokeWidth={1}
         />
 
-        {/* Unit circle */}
+        {/* Reference unit circle */}
         <circle
           cx={CENTER}
           cy={CENTER}
-          r={RADIUS}
+          r={scale}
+          fill="none"
+          stroke="currentColor"
+          className="text-foreground/15"
+          strokeWidth={1}
+          strokeDasharray="2 4"
+        />
+
+        {/* Actual orbit circle */}
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={circleRadius}
           fill="none"
           stroke="currentColor"
           className="text-foreground/30"
@@ -256,11 +323,24 @@ export function EulerExplorer() {
         {/* Angle arc */}
         {effectiveAngle > 0.01 && (
           <path
-            d={describeArc(CENTER, CENTER, 30, 0, effectiveAngle)}
+            d={describeArc(CENTER, CENTER, 24, 0, effectiveAngle)}
             fill="none"
             stroke="#facc15"
             strokeWidth={1.5}
             opacity={0.7}
+          />
+        )}
+
+        {/* Starting point indicator (when phase ≠ 0) */}
+        {constant.phase !== 0 && (
+          <circle
+            cx={CENTER + circleRadius * Math.cos(-constant.phase)}
+            cy={CENTER - circleRadius * Math.sin(constant.phase)}
+            r={4}
+            fill="none"
+            stroke="#facc15"
+            strokeWidth={1.5}
+            opacity={0.5}
           />
         )}
 
@@ -299,7 +379,7 @@ export function EulerExplorer() {
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-[#4ade80] text-xs uppercase tracking-wide">
-            Real (cos)
+            Real
           </span>
           <span className="text-[#4ade80] font-semibold">
             {cosVal.toFixed(4)}
@@ -307,7 +387,7 @@ export function EulerExplorer() {
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-[#f472b6] text-xs uppercase tracking-wide">
-            Imag (sin)
+            Imaginary
           </span>
           <span className="text-[#f472b6] font-semibold">
             {sinVal.toFixed(4)}
@@ -322,8 +402,8 @@ export function EulerExplorer() {
           <input
             type="range"
             min={0}
-            max={preset.thetaMax}
-            step={preset.thetaMax / 600}
+            max={formula.thetaMax}
+            step={formula.thetaMax / 600}
             value={theta}
             onChange={handleSliderChange}
             className="flex-1"
@@ -332,7 +412,7 @@ export function EulerExplorer() {
           <input
             type="number"
             min={0}
-            max={preset.thetaMax}
+            max={formula.thetaMax}
             step={0.1}
             value={theta.toFixed(2)}
             onChange={handleInputChange}

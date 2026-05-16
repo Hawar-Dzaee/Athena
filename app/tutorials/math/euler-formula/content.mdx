@@ -11,11 +11,20 @@ $$
 The real part is $\cos\theta$ and the imaginary part is $\sin\theta$.
 As $\theta$ sweeps from $0$ to $2\pi$, the point $e^{i\theta}$ traces the **unit circle** in the complex plane.
 
+## The constant $c$
+
+Multiplying by a complex constant $c$ transforms the circle:
+
+$$
+c \cdot e^{i\theta}
+$$
+
+- If $c$ is a **real number** (like $2$ or $0.5$), it **scales** the radius — the circle gets bigger or smaller.
+- If $c = e^{i\varphi}$ (like $e^{i\pi/4}$), it **rotates** the starting point by $\varphi$ radians — the circle stays the same size but begins at a different angle.
+- You can combine both: $2 \cdot e^{i\pi/4}$ scales the radius to $2$ *and* rotates by $45°$.
+
 ## Explore it
 
-Pick a formula — $e^{i\theta}$, $e^{2\pi i\theta}$, $e^{2i\theta}$, or $e^{3i\theta}$ — and set $\theta$ with the slider.
-The **real** and **imaginary** parts update numerically. Hit **Play** to sweep $\theta$ across its full range and watch the circle(s) form.
-
-Higher coefficients wind the point around the circle multiple times; $e^{2\pi i\theta}$ completes exactly one revolution as $\theta$ goes from $0$ to $1$.
+Pick a **formula** (the exponent shape) and a **constant** $c$ (the multiplier). Set $\theta$ with the slider or hit **Play** to animate.
 
 <EulerExplorer />
