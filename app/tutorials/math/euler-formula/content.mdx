@@ -1,0 +1,21 @@
+import { EulerExplorer } from "./components/EulerExplorer";
+
+# Euler's Formula
+
+Euler's formula connects the exponential function to trigonometry:
+
+$$
+e^{i\theta} = \cos\theta + i\sin\theta
+$$
+
+The real part is $\cos\theta$ and the imaginary part is $\sin\theta$.
+As $\theta$ sweeps from $0$ to $2\pi$, the point $e^{i\theta}$ traces the **unit circle** in the complex plane.
+
+## Explore it
+
+Pick a formula — $e^{i\theta}$, $e^{2\pi i\theta}$, $e^{2i\theta}$, or $e^{3i\theta}$ — and set $\theta$ with the slider.
+The **real** and **imaginary** parts update numerically. Hit **Play** to sweep $\theta$ across its full range and watch the circle(s) form.
+
+Higher coefficients wind the point around the circle multiple times; $e^{2\pi i\theta}$ completes exactly one revolution as $\theta$ goes from $0$ to $1$.
+
+<EulerExplorer />

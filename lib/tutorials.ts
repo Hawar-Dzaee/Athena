@@ -228,6 +228,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 10,
   },
+  {
+    slug: "euler-formula",
+    topic: "math",
+    title: "Euler's Formula",
+    blurb:
+      "e^(iθ) = cos(θ) + i·sin(θ) — set θ and watch the point on the unit circle. Hit play to trace the full circle.",
+    status: "ready",
+    minutes: 5,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {
