@@ -1,0 +1,26 @@
+import { CircleWaveExplorer } from "./components/CircleWaveExplorer";
+
+# Trigonometry: Circle & Wave
+
+Every sine and cosine value is born from the same geometric act — a point traveling along a circle.
+
+Take a circle of radius $A$ centered at the origin. Place a point on its edge at angle $x$, measured counter-clockwise from the right. Read off its coordinates:
+
+$$
+\text{horizontal} = A\cos(x) \qquad\qquad \text{vertical} = A\sin(x)
+$$
+
+Now let $x$ sweep from $0$ to $2\pi$. As the point completes one revolution, its coordinates rise and fall — tracing the familiar **wave**.
+
+## What each parameter does
+
+- **$A$ (amplitude)** — the radius of the circle. Larger $A$ means a taller wave.
+- **$x$ (angle)** — where the point sits on the circle. On the wave, $x$ becomes the horizontal axis.
+
+## Explore it
+
+Drag the sliders to change $A$ and $x$. Toggle **sin** or **cos** on and off. Press **Play** to watch the point sweep one full circle while the wave traces out beside it.
+
+<CircleWaveExplorer />
+
+The dashed line connecting circle to wave is the key insight: the height of the point on the circle **is** the height on the wave at that angle. Sine and cosine are not abstract formulas — they are coordinates read straight off a circle.

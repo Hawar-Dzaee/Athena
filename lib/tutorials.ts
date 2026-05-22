@@ -237,6 +237,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 5,
   },
+  {
+    slug: "trigonometry",
+    topic: "math",
+    title: "Trigonometry: Circle & Wave",
+    blurb:
+      "See how a point on a circle generates sine and cosine waves — drag amplitude A and angle x to explore A·cos(x) and A·sin(x).",
+    status: "ready",
+    minutes: 6,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {
