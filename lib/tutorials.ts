@@ -112,6 +112,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 8,
   },
   {
+    slug: "resnet5",
+    topic: "deep-learning",
+    title: "ResNet5, module by module",
+    blurb:
+      "A lightweight 3-block residual backbone — configure channels, strides, and pooling and watch shapes propagate.",
+    status: "ready",
+    minutes: 6,
+  },
+  {
     slug: "adaptive-avg-pool2d",
     topic: "pytorch",
     title: "AdaptiveAvgPool2d",

@@ -1,6 +1,6 @@
 # Athena
 
-Interactive web app for math and ML tutorials, built one concept at a time. Reference inspiration: [yizhe-ang/k-means-explorable](https://github.com/yizhe-ang/k-means-explorable) and [TensorFlow Playground](https://playground.tensorflow.org/).
+Athena is an interactive web app for math and ML tutorials, built one concept at a time. Each tutorial combines prose (MDX + LaTeX) with rich interactive visualizations (D3, Three.js, XYFlow) that users manipulate directly in the browser. Reference inspiration: [yizhe-ang/k-means-explorable](https://github.com/yizhe-ang/k-means-explorable) and [TensorFlow Playground](https://playground.tensorflow.org/).
 
 Topics in scope (growing over time):
 
@@ -97,6 +97,15 @@ next.config.ts                  # MDX + remark/rehype pipeline
 4. The landing page picks it up automatically — no other file changes required.
 
 **Never modify existing tutorial files when adding a new one.** If shared utilities are genuinely needed, put them in `lib/` or a new `components/viz/` folder — but resist premature abstraction. **Three similar tutorials before extracting a shared component.**
+
+## Running the app
+
+**Always open in the web browser** (`open http://localhost:3000`) unless explicitly told otherwise. The workflow is: start the dev server, then open it in the browser.
+
+```sh
+npm run dev          # dev server with hot reload (webpack)
+open http://localhost:3000  # open in browser
+```
 
 ## Commands
 

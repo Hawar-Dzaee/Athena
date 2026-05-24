@@ -1,0 +1,18 @@
+import { ResNet5Diagram } from "./components/ResNet5Diagram";
+
+# ResNet5, module by module
+
+ResNet5 is a lightweight residual network — a stem convolution followed by three
+residual blocks. It's the kind of backbone you wire into a larger system (a JEPA
+encoder, a video model) when you need spatial feature extraction without
+ImageNet-scale depth.
+
+Unlike ResNet-18, every dimension is parameterizable: input channels (`in_d`),
+hidden width (`h_d`), output channels (`out_d`), and per-block strides
+(`s1`, `s2`, `s3`). The optional `avg_pool` flag collapses spatial dimensions
+at the end for a flat feature vector.
+
+Use the controls below to experiment with different configurations and see how
+channel counts, strides, and spatial dimensions propagate through the network.
+
+<ResNet5Diagram />
