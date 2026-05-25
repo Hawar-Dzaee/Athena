@@ -1,0 +1,47 @@
+import ConvTranspose2dViz from "./components/ConvTranspose2dViz";
+
+# ConvTranspose2d
+
+A regular `Conv2d` slides a kernel over the input and produces a **smaller**
+output. `nn.ConvTranspose2d` goes the other direction: it takes a small
+feature map and produces a **larger** one — an **upsampling** operation.
+
+The mechanism: for each input pixel with value $x_{ij}$, place a copy of the
+kernel $W$ scaled by $x_{ij}$ at stride-spaced positions in the output, then
+sum all overlapping contributions:
+
+$$
+\text{out}(o_r, o_c) \;=\! \sum_{\substack{i,\,j \\ k_r = o_r - i \cdot s + p \\ k_c = o_c - j \cdot s + p}} x_{ij} \;\cdot\; W(k_r, k_c)
+$$
+
+The output spatial size follows a simple formula — notice it is the
+_reverse_ of the `Conv2d` output-size formula:
+
+$$
+H_{\text{out}} = (H_{\text{in}} - 1) \times s - 2p + k
+$$
+
+This is the standard upsampling layer in decoder networks: U-Net skip
+connections, DCGAN generators, semantic segmentation heads, and
+super-resolution models all rely on `ConvTranspose2d` to go from compressed
+features back to spatial detail.
+
+<ConvTranspose2dViz />
+
+Click any **input cell** to see its intermediate stamp — the kernel scaled by
+that cell's value and placed at the corresponding stride-spaced position.
+The bottom row shows every intermediate side by side; sum them all to get
+the **Final Result**. Adjust the sliders to explore how kernel size, stride,
+and padding change the upsampling.
+
+## Why "transposed"?
+
+If you unroll a regular convolution as a matrix multiply
+$\mathbf{y} = C\,\mathbf{x}$, then the transposed convolution computes
+$C^\top \mathbf{y}$ — the same weight matrix, transposed. It is **not** an
+inverse: $C^\top \neq C^{-1}$. The name "deconvolution" appears in some
+older papers but is technically a misnomer.
+
+The practical takeaway: `ConvTranspose2d` shares its weights with a
+hypothetical `Conv2d` of the same kernel, stride, and padding, but reverses
+the spatial direction — downsampling becomes upsampling.

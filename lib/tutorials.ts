@@ -130,6 +130,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 4,
   },
   {
+    slug: "conv-transpose2d",
+    topic: "pytorch",
+    title: "ConvTranspose2d",
+    blurb:
+      "See how nn.ConvTranspose2d upsamples a feature map by stamping scaled kernel copies at stride-spaced positions and summing overlaps.",
+    status: "ready",
+    minutes: 5,
+  },
+  {
     slug: "vicreg",
     topic: "regularization",
     title: "VICReg: Variance–Invariance–Covariance",
