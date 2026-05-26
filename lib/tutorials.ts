@@ -139,6 +139,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 5,
   },
   {
+    slug: "f-interpolate",
+    topic: "pytorch",
+    title: "F.interpolate",
+    blurb:
+      "See how F.interpolate resizes a feature map — choose nearest, bilinear, or bicubic mode and toggle align_corners to watch the coordinate mapping change.",
+    status: "ready",
+    minutes: 8,
+  },
+  {
     slug: "vicreg",
     topic: "regularization",
     title: "VICReg: Variance–Invariance–Covariance",

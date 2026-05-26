@@ -1,0 +1,144 @@
+import InterpolateViz from "./components/InterpolateViz";
+import AlignCornersDemo from "./components/AlignCornersDemo";
+
+# F.interpolate
+
+`torch.nn.functional.interpolate` resizes the spatial dimensions of a
+tensor. You give it a feature map and a target size, and it fills in
+(or averages out) pixel values to produce the desired resolution. This
+is how skip connections in U-Net, feature pyramid networks, and
+segmentation heads match spatial sizes across layers.
+
+## The call
+
+```python
+x = F.interpolate(
+    x, size=ref, mode="bilinear", align_corners=False
+)
+```
+
+- **`x`** — input tensor, shape $(N, C, H, W)$
+- **`size`** — target spatial size, e.g. `(H_out, W_out)` or a single `int` for square
+- **`mode`** — interpolation algorithm. Default here: `"bilinear"`
+- **`align_corners`** — how pixel coordinates map between input and output. Default here: `False`
+
+## Try it
+
+<InterpolateViz />
+
+Hover over any **output cell** to see which input cells contribute,
+their weights, and the exact arithmetic. The orange dot on the input
+grid shows the mapped source position. Switch modes and toggle
+`align_corners` to see how the results change.
+
+## How it works
+
+Interpolation is a two-step process:
+
+1. **Map** each output pixel $(i,j)$ to a floating-point position in the input
+2. **Sample** the input at that position using the chosen mode
+
+### Coordinate mapping
+
+The mapping formula depends on `align_corners`.
+
+**`align_corners=False`** (default) — pixels are unit-width boxes.
+Source and output grids cover the same spatial extent:
+
+$$
+\text{src} = \left(\text{out} + 0.5\right) \cdot \frac{H_\text{in}}{H_\text{out}} - 0.5
+$$
+
+**`align_corners=True`** — the center of the first input pixel maps
+to the center of the first output pixel, and likewise for the last:
+
+$$
+\text{src} = \text{out} \cdot \frac{H_\text{in} - 1}{H_\text{out} - 1}
+$$
+
+<AlignCornersDemo />
+
+With `align_corners=True`, output corners land exactly on input
+corners — clean when input sizes are fixed. With `False`, every
+output pixel covers an equal share of the input's spatial area —
+better when input sizes vary (adaptive architectures, multi-scale
+inference).
+
+> **PyTorch default:** `align_corners=False` for all modes that
+> support it. The `nearest` mode ignores `align_corners` entirely —
+> it always uses $\lfloor\text{out} \times H_\text{in} / H_\text{out}\rfloor$.
+
+## Interpolation modes
+
+### `nearest`
+
+Pick the single input pixel closest to the mapped coordinate. No
+blending, no gradient through the sampling — just copy.
+
+$$
+\text{out}(i,j) = \text{input}\!\left[\lfloor \text{src}_y \rfloor,\, \lfloor \text{src}_x \rfloor\right]
+$$
+
+Fast and free of smoothing artifacts. Use it when you want hard edges
+(label maps, masks, discrete features).
+
+### `bilinear`
+
+Blend the four surrounding input pixels with weights proportional to
+how close the mapped coordinate is to each one:
+
+$$
+\text{out} = (1\!-\!w_y)(1\!-\!w_x)\,p_{00} + (1\!-\!w_y)\,w_x\,p_{01} + w_y(1\!-\!w_x)\,p_{10} + w_y w_x\,p_{11}
+$$
+
+where $w_x = \text{src}_x - \lfloor \text{src}_x \rfloor$ and
+$w_y = \text{src}_y - \lfloor \text{src}_y \rfloor$, and $p_{ij}$ are
+the four neighbours. Smooth and differentiable — the workhorse for
+most vision networks.
+
+### `bicubic`
+
+Uses a $4 \times 4$ neighbourhood (16 input pixels) weighted by a
+cubic kernel. Sharper than bilinear, preserves edges better, but
+roughly 4$\times$ the compute. The cubic kernel with $a = -0.75$
+(PyTorch default):
+
+$$
+k(x) = \begin{cases}
+(a+2)|x|^3 - (a+3)|x|^2 + 1 & |x| \le 1 \\
+a|x|^3 - 5a|x|^2 + 8a|x| - 4a & 1 < |x| < 2 \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+> Bicubic weights can be **negative** — the output can briefly
+> overshoot the input range. This is normal and the source of its
+> edge-sharpening ability.
+
+## Other notable options
+
+### `mode="area"`
+
+Computes the average of all input pixels whose area overlaps each
+output pixel. Conceptually the inverse of nearest-neighbour
+upsampling. Use it for **downsampling** — it anti-aliases correctly
+and avoids the subtle aliasing you get with bilinear shrinking.
+
+### `mode="nearest-exact"`
+
+A stricter version of `nearest` that uses the half-pixel-offset
+mapping $\lfloor(\text{out}+0.5) \times H_\text{in}/H_\text{out}\rfloor$
+instead of $\lfloor \text{out} \times H_\text{in}/H_\text{out}\rfloor$.
+Matches TensorFlow and scikit-image, and avoids a one-pixel asymmetry
+at certain scale factors.
+
+### `scale_factor` instead of `size`
+
+Instead of an absolute target size, pass a multiplier:
+
+```python
+x = F.interpolate(x, scale_factor=2, mode="bilinear", align_corners=False)
+```
+
+This doubles the spatial dimensions. Useful when you want resolution
+relative to the input rather than fixed.
