@@ -148,6 +148,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 8,
   },
   {
+    slug: "conv3d",
+    topic: "pytorch",
+    title: "Conv3d",
+    blurb:
+      "See how nn.Conv3d slides a 3D kernel through a volume — depth, height, and width — multiplying and summing across every slice it touches.",
+    status: "ready",
+    minutes: 7,
+  },
+  {
     slug: "vicreg",
     topic: "regularization",
     title: "VICReg: Variance–Invariance–Covariance",

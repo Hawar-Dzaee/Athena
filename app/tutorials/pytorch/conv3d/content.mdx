@@ -1,0 +1,70 @@
+import Conv3dViz from "./components/Conv3dViz";
+
+# Conv3d
+
+`nn.Conv2d` slides a flat kernel across the **height** and **width** of an
+image. `nn.Conv3d` adds a third axis: it slides a **cubic** kernel across
+**depth, height, and width** of a *volume*. That extra dimension is what lets
+it learn patterns that live in 3D — frames of a video, slices of a CT scan,
+voxels in a point cloud.
+
+The kernel is no longer a square but a little cube of weights. At every
+position it covers a $k \times k \times k$ block of the input, multiplies each
+voxel by the matching weight, and sums everything into a single output number:
+
+$$
+\text{out}(d, h, w) \;=\; \sum_{i=0}^{k-1}\sum_{j=0}^{k-1}\sum_{l=0}^{k-1}
+x\big(d\,s - p + i,\; h\,s - p + j,\; w\,s - p + l\big)\;\cdot\; W(i, j, l)
+$$
+
+where $s$ is the stride and $p$ the padding. The output volume shrinks (or
+grows, with padding) along **all three** axes, each following the same formula
+as `Conv2d`:
+
+$$
+D_{\text{out}} = \left\lfloor \frac{D_{\text{in}} + 2p - k}{s} \right\rfloor + 1
+$$
+
+<Conv3dViz />
+
+The input volume is drawn as a stack of **depth slices** (`d=0`, `d=1`, …) —
+think of them as consecutive video frames laid side by side. The kernel is its
+own little stack of weight slices. Click any **output cell** to see exactly
+which voxels its receptive field touches: the highlighted cells span *several
+depth slices at once*, because the cube reaches across frames. The strip below
+lists every `input × weight` product being summed into that one output value.
+Hit **▶ Scan** to watch the cube sweep through the whole volume.
+
+## How it differs from Conv2d
+
+A `Conv2d` kernel only mixes information *within* a single slice. A `Conv3d`
+kernel mixes information *across* slices too — so a single output voxel can
+encode motion between video frames or how a structure changes from one CT slice
+to the next. That power comes at a cost: parameters and compute scale with
+$k^3$ instead of $k^2$, which is why 3D convolutions are reserved for genuinely
+volumetric data.
+
+```python
+import torch
+import torch.nn as nn
+
+# (batch, channels, depth, height, width)
+x = torch.randn(1, 3, 16, 64, 64)        # e.g. 16 RGB video frames
+
+conv = nn.Conv3d(
+    in_channels=3,
+    out_channels=8,
+    kernel_size=3,    # → 3×3×3 cube
+    stride=1,
+    padding=1,        # "same" depth/height/width
+)
+
+y = conv(x)
+print(y.shape)        # torch.Size([1, 8, 16, 64, 64])
+```
+
+With `kernel_size=3, stride=1, padding=1`, every spatial dimension is
+preserved — the classic "same" 3D convolution used throughout
+[C3D](https://arxiv.org/abs/1412.0767) and 3D U-Nets for medical imaging.
+Drop the padding or raise the stride in the demo above and watch all three
+output dimensions shrink together.
