@@ -148,6 +148,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 8,
   },
   {
+    slug: "conv3d",
+    topic: "pytorch",
+    title: "Conv3d",
+    blurb:
+      "Scan a 3D kernel across a multi-channel video volume — pick the number of input channels and the time-depth, then watch the receptive field sweep through the cube to fill the output.",
+    status: "ready",
+    minutes: 5,
+  },
+  {
     slug: "vicreg",
     topic: "regularization",
     title: "VICReg: Variance–Invariance–Covariance",
