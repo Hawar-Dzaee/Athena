@@ -387,6 +387,15 @@ export default function Conv3dViz() {
 
   const atEnd = step >= N - 1;
 
+  /* layout: line each kernel up with the center of its input channel */
+  const VOL_PAD = 20; // Volume's pad * 2
+  const CH_GAP = 22; // vertical gap between stacked input channels
+  const inH = IN_R * IN_CELL + (tDepth - 1) * DDY + VOL_PAD;
+  const kernelH = KH * K_CELL + (kD - 1) * DDY + VOL_PAD;
+  const kernelW = KW * K_CELL + (kD - 1) * DDX + VOL_PAD;
+  const colH = cin * inH + (cin - 1) * CH_GAP;
+  const channelCenter = (c: number) => c * (inH + CH_GAP) + inH / 2;
+
   return (
     <div
       role="group"
@@ -482,7 +491,9 @@ export default function Conv3dViz() {
         }}
       >
         <Panel title={`C_in = ${cin}`} axis="T">
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: CH_GAP }}
+          >
             {range(cin).map((c) => (
               <Volume
                 key={c}
@@ -499,17 +510,29 @@ export default function Conv3dViz() {
         </Panel>
 
         <Panel title={`kernel  ${kD}×${KH}×${KW}`} axis="kD">
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          {/* each kernel is absolutely centered on its input channel */}
+          <div style={{ position: "relative", width: kernelW, height: colH }}>
             {range(cin).map((c) => (
-              <Volume
+              <div
                 key={c}
-                frames={kD}
-                rows={KH}
-                cols={KW}
-                cell={K_CELL}
-                fillAt={(d) => CH_COLORS[c][d]}
-                ariaLabel={`Kernel for input channel ${c + 1}`}
-              />
+                style={{
+                  position: "absolute",
+                  top: channelCenter(c) - kernelH / 2,
+                  left: 0,
+                  right: 0,
+                  display: "flex",
+                  justifyContent: "center",
+                }}
+              >
+                <Volume
+                  frames={kD}
+                  rows={KH}
+                  cols={KW}
+                  cell={K_CELL}
+                  fillAt={(d) => CH_COLORS[c][d]}
+                  ariaLabel={`Kernel for input channel ${c + 1}`}
+                />
+              </div>
             ))}
           </div>
         </Panel>
