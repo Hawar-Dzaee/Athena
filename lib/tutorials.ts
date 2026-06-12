@@ -220,6 +220,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 8,
   },
   {
+    slug: "video-jepa-parallel-rollout",
+    topic: "deep-learning",
+    title: "Video JEPA — the parallel rollout",
+    blurb:
+      "Unroll the parallel-mode n-step prediction loop from eb_jepa — pick the number of frames and watch the light-cone of predictions-of-predictions deepen, step by step, until it saturates at T−2.",
+    status: "ready",
+    minutes: 10,
+  },
+  {
     slug: "warmup-cosine-scheduler",
     topic: "deep-learning",
     title: "Warmup Cosine Scheduler",

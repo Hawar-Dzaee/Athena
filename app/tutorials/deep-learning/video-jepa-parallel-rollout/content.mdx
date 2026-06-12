@@ -1,0 +1,55 @@
+import VideoJepaRolloutViz from "./components/VideoJepaRolloutViz";
+
+# Video JEPA — the parallel rollout
+
+A **Joint Embedding Predictive Architecture** learns by predicting its own *future representations* rather than future pixels. For video, the model encodes a clip of $T$ frames into states $s_0, s_1, \dots, s_{T-1}$, then a **predictor** rolls those states forward in time. Training pushes each predicted state toward the encoder's real state at that timestep.
+
+This tutorial is about one specific thing: the **parallel** unroll mode in [`facebookresearch/eb_jepa`](https://github.com/facebookresearch/eb_jepa), and the `n`-step loop hiding inside it.
+
+## The loop
+
+In parallel mode every timestep is predicted *at once*, and a small block of ground-truth context is re-fed on the left after each pass. Here is the exact loop from [`eb_jepa/jepa.py`](https://github.com/facebookresearch/eb_jepa/blob/main/eb_jepa/jepa.py):
+
+```python
+# unroll_mode == "parallel"
+predicted_states = state                              # [B, D, T, H, W]
+for _ in range(nsteps):
+    # predict every timestep, discard the last (no target for it)
+    predicted_states = self.predictor(predicted_states)[:, :, :-1]
+    # re-feed the ground-truth context on the left
+    predicted_states = torch.cat(
+        (state[:, :, :context_length], predicted_states), dim=2
+    )
+    ploss += self.predcost(state, predicted_states) / nsteps
+```
+
+The predictor is a `StateOnlyPredictor` with `context_length = 2`. It turns the sequence into **overlapping (prev, next) pairs** before predicting:
+
+```python
+class StateOnlyPredictor(SimplePredictor):
+    def forward(self, x, a):           # x: [B, C, T, H, W]
+        prev_state = x[:, :, :-1]      # [B, C, T-1, H, W]  ← the "prev" frame
+        next_state = x[:, :, 1:]       # [B, C, T-1, H, W]  ← the "next" frame
+        combined = torch.cat((prev_state, next_state), dim=1)  # C → 2C
+        return self.predictor(combined)                        # T-1 predictions
+```
+
+So $T$ frames make $T-1$ pairs, the net emits $T-1$ predictions, the loop drops the last one, and prepends the $2$ ground-truth context frames — landing back at exactly $T$ frames, ready for the next pass.
+
+## Play with it
+
+Pick the number of frames $T$. The number of meaningful passes is
+
+$$\text{nsteps} = T - \texttt{context\_length} = T - 2.$$
+
+Each frame is shaded by its **prediction depth** — how many times it has been predicted *from earlier predictions*. The two ground-truth context frames (beige) never enter the loss; everything to their right gets one shade deeper with each pass it depends on. Click any **StateOnlyPredictor** box to unfold its internals.
+
+<VideoJepaRolloutViz />
+
+## Why it stops at $T-2$
+
+Track a single frame. After one pass, frame $t$ (for $t \ge 2$) is a depth-1 prediction. On the next pass it is rebuilt from the pair $(s_{t-2}, s_{t-1})$ of the *previous* sequence — so its depth grows, but only as fast as the ground-truth context can "reach" it. The depth of frame $t$ after $\texttt{step}$ passes is a clean light-cone:
+
+$$\operatorname{depth}(t, \texttt{step}) = \min(\texttt{step},\ t-1), \qquad t \ge 2.$$
+
+The deepest a frame can get is bounded by its distance from the context, and the last frame sits at $t = T-1$, giving a maximum depth of $T-2$. Once $\texttt{step} = T-2$, **every** frame has saturated — another pass reproduces the identical sequence and adds nothing to the loss. That is exactly the *"since we only have $T$ frames, moving forward is useless"* boundary: it is not a hand-wave, it falls straight out of the recurrence.
