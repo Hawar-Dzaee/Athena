@@ -287,20 +287,22 @@ function Panel({
 export default function Conv3dViz() {
   const [cin, setCin] = useState(2);
   const [tDepth, setTDepth] = useState(3);
-  const [kSize, setKSize] = useState(2); // spatial kernel size (square, KH = KW)
-  const [stride, setStride] = useState(1); // stride along every axis
+  const [kHW, setKHW] = useState(2); // spatial kernel size (square, KH = KW)
+  const [sHW, setSHW] = useState(1); // spatial stride (along H and W)
+  const [kT, setKT] = useState(2); // temporal kernel depth
+  const [sT, setST] = useState(1); // temporal stride (along T)
   const [seed, setSeed] = useState(1);
   const [step, setStep] = useState(-1);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(440); // ms per scan step
 
   /* kernel geometry derived from the controls */
-  const KH = kSize;
-  const KW = kSize;
-  const kD = Math.min(kSize, tDepth); // depth kernel, clamped to available frames
-  const sH = stride;
-  const sW = stride;
-  const sD = stride;
+  const KH = kHW;
+  const KW = kHW;
+  const kD = Math.min(kT, tDepth); // temporal kernel, clamped to available frames
+  const sH = sHW;
+  const sW = sHW;
+  const sD = sT;
 
   /* output geometry — PyTorch's floor((in − kernel) / stride) + 1 */
   const OUT_R = Math.floor((IN_R - KH) / sH) + 1;
@@ -342,7 +344,7 @@ export default function Conv3dViz() {
   useEffect(() => {
     setStep(-1);
     setPlaying(false);
-  }, [cin, tDepth, seed, kSize, stride]);
+  }, [cin, tDepth, seed, kHW, sHW, kT, sT]);
 
   // playback loop
   useEffect(() => {
@@ -434,8 +436,10 @@ export default function Conv3dViz() {
       >
         <Selector label="C_in  (channels)" value={cin} onChange={setCin} />
         <Selector label="T  (depth)" value={tDepth} onChange={setTDepth} />
-        <Selector label="kernel  (K)" value={kSize} onChange={setKSize} />
-        <Selector label="stride  (S)" value={stride} onChange={setStride} />
+        <Selector label="kernel · temporal" value={kT} onChange={setKT} />
+        <Selector label="stride · temporal" value={sT} onChange={setST} />
+        <Selector label="kernel · spatial" value={kHW} onChange={setKHW} />
+        <Selector label="stride · spatial" value={sHW} onChange={setSHW} />
         <div
           style={{
             display: "flex",
