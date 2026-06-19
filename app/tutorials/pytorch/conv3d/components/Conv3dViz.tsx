@@ -16,18 +16,15 @@ const OUT_CELL = 34;
 const DDX = 18; // depth (time) offset, x — frames recede up-and-right
 const DDY = 18; // depth (time) offset, y
 
-const IN_R = 4; // input H
-const IN_C = 4; // input W
-const KH = 2; // kernel height
-const KW = 2; // kernel width
-const OUT_R = IN_R - KH + 1; // 3
-const OUT_C = IN_C - KW + 1; // 3
+const IN_R = 5; // input H
+const IN_C = 5; // input W
 
-/* per-(channel, depth-slice) pastel pair, echoing the reference sketch */
-const CH_COLORS: [string, string][] = [
-  ["#f6b3b3", "#ece6c6"], // channel 0 — pink / beige
-  ["#f5c184", "#dcb4ef"], // channel 1 — orange / lilac
-  ["#a8d2ff", "#bde9cf"], // channel 2 — blue / mint
+/* per-(channel, depth-slice) pastel triple, echoing the reference sketch.
+ * three shades cover a kernel up to 3 frames deep. */
+const CH_COLORS: string[][] = [
+  ["#f6b3b3", "#ece6c6", "#f3d2b3"], // channel 0 — pink / beige / peach
+  ["#f5c184", "#dcb4ef", "#c9d6a3"], // channel 1 — orange / lilac / sage
+  ["#a8d2ff", "#bde9cf", "#d9c2f0"], // channel 2 — blue / mint / wisteria
 ];
 
 /* ---- palette ---- */
@@ -290,13 +287,25 @@ function Panel({
 export default function Conv3dViz() {
   const [cin, setCin] = useState(2);
   const [tDepth, setTDepth] = useState(3);
+  const [kSize, setKSize] = useState(2); // spatial kernel size (square, KH = KW)
+  const [stride, setStride] = useState(1); // stride along every axis
   const [seed, setSeed] = useState(1);
   const [step, setStep] = useState(-1);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(440); // ms per scan step
 
-  const kD = Math.min(2, tDepth); // kernel depth: 1×1×1 when T=1, else 2-deep
-  const tOut = tDepth - kD + 1;
+  /* kernel geometry derived from the controls */
+  const KH = kSize;
+  const KW = kSize;
+  const kD = Math.min(kSize, tDepth); // depth kernel, clamped to available frames
+  const sH = stride;
+  const sW = stride;
+  const sD = stride;
+
+  /* output geometry — PyTorch's floor((in − kernel) / stride) + 1 */
+  const OUT_R = Math.floor((IN_R - KH) / sH) + 1;
+  const OUT_C = Math.floor((IN_C - KW) / sW) + 1;
+  const tOut = Math.floor((tDepth - kD) / sD) + 1;
   const N = tOut * OUT_R * OUT_C;
 
   /* random input volume + kernel weights, recomputed on config / reroll */
@@ -320,20 +329,20 @@ export default function Conv3dViz() {
               for (let hh = 0; hh < KH; hh++)
                 for (let ww = 0; ww < KW; ww++)
                   s +=
-                    input[c][od + dd][or + hh][oc + ww] *
+                    input[c][od * sD + dd][or * sH + hh][oc * sW + ww] *
                     weight[c][dd][hh][ww];
           return s / count; // keep results in a clean 0..1 range
         }),
       ),
     );
     return { input, weight, output };
-  }, [cin, tDepth, seed, kD, tOut]);
+  }, [cin, tDepth, seed, kD, tOut, KH, KW, OUT_R, OUT_C, sD, sH, sW]);
 
   // reset the scan whenever the configuration changes
   useEffect(() => {
     setStep(-1);
     setPlaying(false);
-  }, [cin, tDepth, seed]);
+  }, [cin, tDepth, seed, kSize, stride]);
 
   // playback loop
   useEffect(() => {
@@ -357,20 +366,23 @@ export default function Conv3dViz() {
         }
       : null;
 
-  /* input highlight: the receptive field of the current output cell */
+  /* input highlight: the receptive field of the current output cell,
+   * anchored by the stride along every axis */
   const inHit = (d: number, r: number, c: number) =>
     cur != null &&
-    d >= cur.od &&
-    d < cur.od + kD &&
-    r >= cur.or &&
-    r < cur.or + KH &&
-    c >= cur.oc &&
-    c < cur.oc + KW;
+    d >= cur.od * sD &&
+    d < cur.od * sD + kD &&
+    r >= cur.or * sH &&
+    r < cur.or * sH + KH &&
+    c >= cur.oc * sW &&
+    c < cur.oc * sW + KW;
 
   const inputFill =
     (ch: number): CellFn =>
     (d, r, c) =>
-      inHit(d, r, c) ? CH_COLORS[ch][d - (cur as { od: number }).od] : null;
+      inHit(d, r, c)
+        ? CH_COLORS[ch][d - (cur as { od: number }).od * sD]
+        : null;
   const inputCurrent: FlagFn = (d, r, c) => inHit(d, r, c);
 
   const idx = (od: number, or: number, oc: number) =>
@@ -422,6 +434,8 @@ export default function Conv3dViz() {
       >
         <Selector label="C_in  (channels)" value={cin} onChange={setCin} />
         <Selector label="T  (depth)" value={tDepth} onChange={setTDepth} />
+        <Selector label="kernel  (K)" value={kSize} onChange={setKSize} />
+        <Selector label="stride  (S)" value={stride} onChange={setStride} />
         <div
           style={{
             display: "flex",
