@@ -11,7 +11,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 /* ---- fixed geometry ---- */
 const IN_CELL = 26;
-const K_CELL = 24;
+const K_CELL = 30;
 const OUT_CELL = 34;
 const DDX = 18; // depth (time) offset, x — frames recede up-and-right
 const DDY = 18; // depth (time) offset, y
@@ -26,6 +26,15 @@ const CH_COLORS: string[][] = [
   ["#f5c184", "#dcb4ef", "#c9d6a3"], // channel 1 — orange / lilac / sage
   ["#a8d2ff", "#bde9cf", "#d9c2f0"], // channel 2 — blue / mint / wisteria
 ];
+
+/* per-output-channel hue — each filter (and its kernel bank) gets its own color */
+const OUT_HUES = [168, 30, 286]; // out 0 teal · out 1 amber · out 2 violet
+
+/* within one filter's bank, each input channel takes a clearly separated
+ * step in saturation + lightness (same hue) so the stacked kernels never blur
+ * together: pale → medium → deep */
+const KERNEL_S = [40, 60, 72]; // saturation per input channel
+const KERNEL_L = [84, 62, 44]; // lightness per input channel
 
 /* ---- palette ---- */
 const PAPER = "#fbfaf6";
@@ -56,6 +65,7 @@ function Volume({
   cell,
   fillAt,
   textAt,
+  textColorAt,
   currentAt,
   ariaLabel,
 }: {
@@ -65,6 +75,7 @@ function Volume({
   cell: number;
   fillAt: CellFn;
   textAt?: CellFn;
+  textColorAt?: CellFn;
   currentAt?: FlagFn;
   ariaLabel: string;
 }) {
@@ -101,6 +112,7 @@ function Volume({
                   const fill = fillAt(d, r, c);
                   const cur = currentAt ? currentAt(d, r, c) : false;
                   const txt = textAt ? textAt(d, r, c) : null;
+                  const txtColor = textColorAt ? textColorAt(d, r, c) : null;
                   return (
                     <g key={`${r}-${c}`}>
                       <rect
@@ -122,7 +134,7 @@ function Volume({
                           fontSize={cell * 0.42}
                           fontFamily={FONT}
                           fontWeight={600}
-                          fill={INK}
+                          fill={txtColor ?? INK}
                         >
                           {txt}
                         </text>
@@ -234,6 +246,39 @@ function Btn({
   );
 }
 
+/* small colored tag naming an output channel / filter */
+function OutChip({ index, active }: { index: number; active?: boolean }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        fontSize: 12,
+        fontWeight: 700,
+        fontFamily: FONT,
+        color: active ? INK : MUTE,
+        padding: "2px 8px",
+        borderRadius: 8,
+        border: `1.5px solid ${active ? `hsl(${OUT_HUES[index]} 45% 55%)` : "transparent"}`,
+        background: active ? `hsl(${OUT_HUES[index]} 60% 96%)` : "transparent",
+        transition: "all 160ms ease",
+      }}
+    >
+      <span
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: 3,
+          background: `hsl(${OUT_HUES[index]} 55% 60%)`,
+          display: "inline-block",
+        }}
+      />
+      out {index + 1}
+    </div>
+  );
+}
+
 function Panel({
   title,
   axis,
@@ -286,6 +331,7 @@ function Panel({
 
 export default function Conv3dViz() {
   const [cin, setCin] = useState(2);
+  const [cout, setCout] = useState(1); // number of output channels (filters)
   const [tDepth, setTDepth] = useState(3);
   const [kHW, setKHW] = useState(2); // spatial kernel size (square, KH = KW)
   const [sHW, setSHW] = useState(1); // spatial stride (along H and W)
@@ -308,7 +354,8 @@ export default function Conv3dViz() {
   const OUT_R = Math.floor((IN_R - KH) / sH) + 1;
   const OUT_C = Math.floor((IN_C - KW) / sW) + 1;
   const tOut = Math.floor((tDepth - kD) / sD) + 1;
-  const N = tOut * OUT_R * OUT_C;
+  const M = tOut * OUT_R * OUT_C; // cells in one output channel
+  const N = cout * M; // total scan: build one output channel at a time
 
   /* random input volume + kernel weights, recomputed on config / reroll */
   const { input, weight, output } = useMemo(() => {
@@ -318,33 +365,38 @@ export default function Conv3dViz() {
         range(IN_R).map(() => range(IN_C).map(() => rand())),
       ),
     );
-    const weight = range(cin).map(() =>
-      range(kD).map(() => range(KH).map(() => range(KW).map(() => rand()))),
+    /* one independent kernel bank per output channel: [C_out][C_in][kD][KH][KW] */
+    const weight = range(cout).map(() =>
+      range(cin).map(() =>
+        range(kD).map(() => range(KH).map(() => range(KW).map(() => rand()))),
+      ),
     );
     const count = cin * kD * KH * KW;
-    const output = range(tOut).map((od) =>
-      range(OUT_R).map((or) =>
-        range(OUT_C).map((oc) => {
-          let s = 0;
-          for (let c = 0; c < cin; c++)
-            for (let dd = 0; dd < kD; dd++)
-              for (let hh = 0; hh < KH; hh++)
-                for (let ww = 0; ww < KW; ww++)
-                  s +=
-                    input[c][od * sD + dd][or * sH + hh][oc * sW + ww] *
-                    weight[c][dd][hh][ww];
-          return s / count; // keep results in a clean 0..1 range
-        }),
+    const output = range(cout).map((co) =>
+      range(tOut).map((od) =>
+        range(OUT_R).map((or) =>
+          range(OUT_C).map((oc) => {
+            let s = 0;
+            for (let c = 0; c < cin; c++)
+              for (let dd = 0; dd < kD; dd++)
+                for (let hh = 0; hh < KH; hh++)
+                  for (let ww = 0; ww < KW; ww++)
+                    s +=
+                      input[c][od * sD + dd][or * sH + hh][oc * sW + ww] *
+                      weight[co][c][dd][hh][ww];
+            return s / count; // keep results in a clean 0..1 range
+          }),
+        ),
       ),
     );
     return { input, weight, output };
-  }, [cin, tDepth, seed, kD, tOut, KH, KW, OUT_R, OUT_C, sD, sH, sW]);
+  }, [cin, cout, tDepth, seed, kD, tOut, KH, KW, OUT_R, OUT_C, sD, sH, sW]);
 
   // reset the scan whenever the configuration changes
   useEffect(() => {
     setStep(-1);
     setPlaying(false);
-  }, [cin, tDepth, seed, kHW, sHW, kT, sT]);
+  }, [cin, cout, tDepth, seed, kHW, sHW, kT, sT]);
 
   // playback loop
   useEffect(() => {
@@ -362,9 +414,10 @@ export default function Conv3dViz() {
   const cur =
     step >= 0 && step < N
       ? {
-          od: Math.floor(step / (OUT_R * OUT_C)),
-          or: Math.floor((step % (OUT_R * OUT_C)) / OUT_C),
-          oc: step % OUT_C,
+          co: Math.floor(step / M), // which output channel is being built
+          od: Math.floor((step % M) / (OUT_R * OUT_C)),
+          or: Math.floor(((step % M) % (OUT_R * OUT_C)) / OUT_C),
+          oc: (step % M) % OUT_C,
         }
       : null;
 
@@ -387,19 +440,51 @@ export default function Conv3dViz() {
         : null;
   const inputCurrent: FlagFn = (d, r, c) => inHit(d, r, c);
 
-  const idx = (od: number, or: number, oc: number) =>
-    od * (OUT_R * OUT_C) + or * OUT_C + oc;
+  /* overall scan index of a cell: each output channel is scanned in full
+   * before the next one begins */
+  const gidx = (co: number, od: number, or: number, oc: number) =>
+    co * M + od * (OUT_R * OUT_C) + or * OUT_C + oc;
 
-  const outFill: CellFn = (od, or, oc) => {
-    if (idx(od, or, oc) > step) return null;
-    const v = output[od][or][oc];
-    return `hsl(168 55% ${88 - v * 34}%)`;
-  };
-  const outText: CellFn = (od, or, oc) =>
-    idx(od, or, oc) > step ? null : output[od][or][oc].toFixed(1);
-  const outCurrent: FlagFn = (od, or, oc) => idx(od, or, oc) === step;
+  const outFill =
+    (co: number): CellFn =>
+    (od, or, oc) => {
+      if (gidx(co, od, or, oc) > step) return null;
+      const v = output[co][od][or][oc];
+      return `hsl(${OUT_HUES[co]} 55% ${88 - v * 34}%)`;
+    };
+  const outText =
+    (co: number): CellFn =>
+    (od, or, oc) =>
+      gidx(co, od, or, oc) > step ? null : output[co][od][or][oc].toFixed(1);
+  const outCurrent =
+    (co: number): FlagFn =>
+    (od, or, oc) =>
+      gidx(co, od, or, oc) === step;
 
   const atEnd = step >= N - 1;
+
+  /* kernel cells are tinted by their OUTPUT channel (so each filter reads as a
+   * distinct color, matching its output volume); lightness separates the
+   * stacked input channels and depth slices within a bank */
+  const kernelShade = (co: number, c: number, d: number) =>
+    `hsl(${OUT_HUES[co]} ${KERNEL_S[c]}% ${KERNEL_L[c] - d * 6}%)`;
+
+  /* the real learned weights, written into each kernel cell — these are the
+   * exact values multiplied into the convolution sum */
+  const kernelText =
+    (co: number, c: number): CellFn =>
+    (d, r, cc) =>
+      weight[co][c][d][r][cc].toFixed(2);
+  /* keep the number legible on both the pale and the deep kernel shades */
+  const kernelTextColor =
+    (c: number): CellFn =>
+    (d) =>
+      KERNEL_L[c] - d * 6 < 60 ? "#fff" : INK;
+
+  /* while scanning, the active output channel's bank is lit and the rest dim */
+  const activeCo = cur ? cur.co : null;
+  const bankOpacity = (co: number) =>
+    activeCo != null && activeCo !== co ? 0.3 : 1;
 
   /* layout: line each kernel up with the center of its input channel */
   const VOL_PAD = 20; // Volume's pad * 2
@@ -435,11 +520,8 @@ export default function Conv3dViz() {
         }}
       >
         <Selector label="C_in  (channels)" value={cin} onChange={setCin} />
+        <Selector label="C_out  (filters)" value={cout} onChange={setCout} />
         <Selector label="T  (depth)" value={tDepth} onChange={setTDepth} />
-        <Selector label="kernel · temporal" value={kT} onChange={setKT} />
-        <Selector label="stride · temporal" value={sT} onChange={setST} />
-        <Selector label="kernel · spatial" value={kHW} onChange={setKHW} />
-        <Selector label="stride · spatial" value={sHW} onChange={setSHW} />
         <div
           style={{
             display: "flex",
@@ -468,6 +550,24 @@ export default function Conv3dViz() {
           </Btn>
           <Btn onClick={() => setSeed((s) => s + 1)}>Reroll</Btn>
         </div>
+      </div>
+
+      {/* kernel & stride controls — their own row */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 20,
+          alignItems: "flex-end",
+          marginBottom: 18,
+          paddingTop: 18,
+          borderTop: `1px solid ${GRID}`,
+        }}
+      >
+        <Selector label="kernel · temporal" value={kT} onChange={setKT} />
+        <Selector label="stride · temporal" value={sT} onChange={setST} />
+        <Selector label="kernel · spatial" value={kHW} onChange={setKHW} />
+        <Selector label="stride · spatial" value={sHW} onChange={setSHW} />
       </div>
 
       {/* speed + progress */}
@@ -528,44 +628,83 @@ export default function Conv3dViz() {
         </Panel>
 
         <Panel title={`kernel  ${kD}×${KH}×${KW}`} axis="kD">
-          {/* each kernel is absolutely centered on its input channel */}
-          <div style={{ position: "relative", width: kernelW, height: colH }}>
-            {range(cin).map((c) => (
+          {/* one bank of C_in kernels per output channel (filter) */}
+          <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+            {range(cout).map((co) => (
               <div
-                key={c}
+                key={co}
                 style={{
-                  position: "absolute",
-                  top: channelCenter(c) - kernelH / 2,
-                  left: 0,
-                  right: 0,
                   display: "flex",
-                  justifyContent: "center",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 8,
+                  opacity: bankOpacity(co),
+                  transition: "opacity 160ms ease",
                 }}
               >
-                <Volume
-                  frames={kD}
-                  rows={KH}
-                  cols={KW}
-                  cell={K_CELL}
-                  fillAt={(d) => CH_COLORS[c][d]}
-                  ariaLabel={`Kernel for input channel ${c + 1}`}
-                />
+                {/* each kernel is absolutely centered on its input channel */}
+                <div
+                  style={{ position: "relative", width: kernelW, height: colH }}
+                >
+                  {range(cin).map((c) => (
+                    <div
+                      key={c}
+                      style={{
+                        position: "absolute",
+                        top: channelCenter(c) - kernelH / 2,
+                        left: 0,
+                        right: 0,
+                        display: "flex",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Volume
+                        frames={kD}
+                        rows={KH}
+                        cols={KW}
+                        cell={K_CELL}
+                        fillAt={(d) => kernelShade(co, c, d)}
+                        textAt={kernelText(co, c)}
+                        textColorAt={kernelTextColor(c)}
+                        ariaLabel={`Kernel for output channel ${co + 1}, input channel ${c + 1}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {cout > 1 && <OutChip index={co} active={activeCo === co} />}
               </div>
             ))}
           </div>
         </Panel>
 
-        <Panel title="C_out = 1">
-          <Volume
-            frames={tOut}
-            rows={OUT_R}
-            cols={OUT_C}
-            cell={OUT_CELL}
-            fillAt={outFill}
-            textAt={outText}
-            currentAt={outCurrent}
-            ariaLabel={`Output: ${tOut} frames of ${OUT_R} by ${OUT_C}`}
-          />
+        <Panel title={`C_out = ${cout}`}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: CH_GAP }}
+          >
+            {range(cout).map((co) => (
+              <div
+                key={co}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {cout > 1 && <OutChip index={co} active={activeCo === co} />}
+                <Volume
+                  frames={tOut}
+                  rows={OUT_R}
+                  cols={OUT_C}
+                  cell={OUT_CELL}
+                  fillAt={outFill(co)}
+                  textAt={outText(co)}
+                  currentAt={outCurrent(co)}
+                  ariaLabel={`Output channel ${co + 1}: ${tOut} frames of ${OUT_R} by ${OUT_C}`}
+                />
+              </div>
+            ))}
+          </div>
         </Panel>
       </div>
     </div>
