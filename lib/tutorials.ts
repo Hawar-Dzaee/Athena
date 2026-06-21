@@ -67,6 +67,15 @@ export const TOPICS: Record<Topic, { label: string; description: string; accent:
 
 export const TUTORIALS: Tutorial[] = [
   {
+    slug: "convolution",
+    topic: "deep-learning",
+    title: "Convolution",
+    blurb:
+      "Type the nine weights of a 3×3 kernel, then watch it slide across an image and build the convolved output pixel by pixel — blur, sharpen, or detect edges in real time.",
+    status: "ready",
+    minutes: 4,
+  },
+  {
     slug: "vector-addition",
     topic: "linear-algebra",
     title: "Vector addition, geometrically",
