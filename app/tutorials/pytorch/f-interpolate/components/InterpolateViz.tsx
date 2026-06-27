@@ -14,10 +14,12 @@ function mulberry32(seed: number) {
   };
 }
 
+const PALETTE = [10, 20, 35, 50, 65, 80, 92, 99];
+
 function makeGrid(size: number, seed: number): number[][] {
   const rng = mulberry32(seed);
   return Array.from({ length: size }, () =>
-    Array.from({ length: size }, () => Math.round(rng() * 90) / 10)
+    Array.from({ length: size }, () => PALETTE[Math.floor(rng() * PALETTE.length)])
   );
 }
 
@@ -178,11 +180,22 @@ function sample(
 /* ── color ── */
 
 function valColor(v: number): string {
-  const t = clamp(v / 9, 0, 1);
-  const r = Math.round(59 + t * 190);
-  const g = Math.round(130 - t * 15);
-  const b = Math.round(246 - t * 224);
-  return `rgba(${r}, ${g}, ${b}, 0.25)`;
+  const t = clamp(v / 100, 0, 1);
+  // Viridis keypoints: dark purple → blue-purple → teal → green → yellow
+  const stops = [
+    [68, 1, 84],
+    [59, 82, 139],
+    [33, 145, 140],
+    [94, 201, 98],
+    [253, 231, 37],
+  ] as const;
+  const seg = t * (stops.length - 1);
+  const i = Math.min(Math.floor(seg), stops.length - 2);
+  const f = seg - i;
+  const r = Math.round(stops[i][0] + f * (stops[i + 1][0] - stops[i][0]));
+  const g = Math.round(stops[i][1] + f * (stops[i + 1][1] - stops[i][1]));
+  const b = Math.round(stops[i][2] + f * (stops[i + 1][2] - stops[i][2]));
+  return `rgba(${r}, ${g}, ${b}, 0.65)`;
 }
 
 const HL = { bg: "rgba(99,102,241,0.25)", border: "rgb(99,102,241)" };
@@ -353,7 +366,7 @@ export default function InterpolateViz() {
                       borderWidth: hl ? 2 : 1,
                     }}
                   >
-                    {val.toFixed(1)}
+                    {val}
                     {hl && wt && Math.abs(wt.w) > 0.04 && (
                       <span className="absolute -right-2 -top-2 z-30 rounded-full bg-indigo-500 px-1 text-[9px] font-bold leading-[14px] text-white">
                         {wt.w < 0 ? "−" : ""}
@@ -516,7 +529,7 @@ function Detail({
               <span className="text-foreground">
                 in[{w.r},{w.c}]
               </span>
-              ({grid[w.r][w.c].toFixed(1)})
+              ({grid[w.r][w.c]})
             </span>
           );
         })}
