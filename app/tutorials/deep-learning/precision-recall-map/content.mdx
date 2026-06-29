@@ -1,0 +1,130 @@
+import { PRCurveViz } from "./components/PRCurveViz";
+import { MAPExplorer } from "./components/MAPExplorer";
+
+# Precision, Recall, and mAP
+
+## The threshold tradeoff
+
+Most models output a **confidence score** between 0 and 1 rather than a hard yes/no.
+You choose a **threshold** $\tau$: predictions above it count as positive, below it as
+negative.
+
+- **High $\tau$**: only the most confident predictions make it through → fewer FPs →
+  higher precision, but more real targets are missed → lower recall.
+- **Low $\tau$**: almost everything is predicted positive → catches more real targets →
+  higher recall, but floods in false alarms → lower precision.
+
+Precision and recall are in tension. Drag the slider below to see it live. Watch the
+prediction strip at the bottom: green squares are true positives, red are false
+positives, and faded orange are the positives you're missing.
+
+<PRCurveViz />
+
+## The precision-recall curve
+
+Instead of committing to one threshold, sweep $\tau$ from 1 down to 0 and record the
+$(recall, precision)$ pair at each step. The result is the **precision-recall curve** —
+a complete picture of the classifier's tradeoff spectrum.
+
+The curve always starts near the top-left: at a very high threshold only the model's
+most confident (and usually correct) predictions are included, so precision is high but
+recall is low. As you lower $\tau$ you catch more true positives (recall rises) while
+also letting in more false alarms (precision generally falls). A **better classifier**
+produces a curve that stays close to the top-right corner — high precision *at* high
+recall. A random classifier hugs a flat horizontal line at the base rate.
+
+## Average Precision (AP)
+
+Comparing two classifiers by their curves is awkward — the curves can cross. **Average
+Precision** collapses the whole curve into a single number: the area under it.
+
+$$
+\text{AP} = \sum_{k=1}^{N} \bigl(r_k - r_{k-1}\bigr) \cdot P_k
+$$
+
+where $N$ is the total number of predictions, $r_k$ is the recall after the $k$-th
+prediction is included, and $P_k$ is the precision at that point. Each term is a
+rectangle of width $\Delta r_k$ and height $P_k$ — summing them gives the area under
+the curve. AP lies in $[0, 1]$.
+
+### Worked example
+
+Suppose there are **5 actual positives** and your model ranks 8 predictions by
+confidence score (highest first):
+
+| Rank | Confidence | Label | Running TP | Running FP | Precision $P_k$ | Recall $r_k$ |
+| ---- | :--------: | :---: | :--------: | :--------: | :-------------: | :----------: |
+| 1    | 0.97       | ✓ TP  | 1          | 0          | 1.00            | 0.20         |
+| 2    | 0.88       | ✓ TP  | 2          | 0          | 1.00            | 0.40         |
+| 3    | 0.73       | ✗ FP  | 2          | 1          | 0.67            | 0.40         |
+| 4    | 0.61       | ✓ TP  | 3          | 1          | 0.75            | 0.60         |
+| 5    | 0.50       | ✗ FP  | 3          | 2          | 0.60            | 0.60         |
+| 6    | 0.37       | ✓ TP  | 4          | 2          | 0.67            | 0.80         |
+| 7    | 0.25       | ✗ FP  | 4          | 3          | 0.57            | 0.80         |
+| 8    | 0.12       | ✓ TP  | 5          | 3          | 0.63            | 1.00         |
+
+Now apply the summation. Only TPs advance recall ($\Delta r > 0$), so FPs contribute
+zero directly — but they erode precision for the next TP:
+
+| Rank | $r_{k-1}$ | $r_k$ | $\Delta r_k$ | $P_k$ | $\Delta r_k \cdot P_k$ |
+| ---- | :-------: | :---: | :----------: | :---: | :--------------------: |
+| 1 (TP) | 0.00 | 0.20 | **0.20** | 1.00 | 0.200 |
+| 2 (TP) | 0.20 | 0.40 | **0.20** | 1.00 | 0.200 |
+| 3 (FP) | 0.40 | 0.40 | **0.00** | 0.67 | 0.000 |
+| 4 (TP) | 0.40 | 0.60 | **0.20** | 0.75 | 0.150 |
+| 5 (FP) | 0.60 | 0.60 | **0.00** | 0.60 | 0.000 |
+| 6 (TP) | 0.60 | 0.80 | **0.20** | 0.67 | 0.133 |
+| 7 (FP) | 0.80 | 0.80 | **0.00** | 0.57 | 0.000 |
+| 8 (TP) | 0.80 | 1.00 | **0.20** | 0.63 | 0.125 |
+
+$$
+\text{AP} = 0.200 + 0.200 + 0 + 0.150 + 0 + 0.133 + 0 + 0.125 = \mathbf{0.808}
+$$
+
+Notice what the three FPs do: they add nothing to AP themselves, but each one
+increases the denominator $TP + FP$, so the next TP's precision is lower than it would
+have been. A classifier that surfaces all five TPs *before* any FP would score
+AP = 1.0.
+
+## Mean Average Precision (mAP)
+
+Real benchmarks have **multiple classes** — person, car, dog, and so on. Each class
+gets its own PR curve and its own AP. **mAP** is simply the mean:
+
+$$
+\text{mAP} = \frac{1}{C} \sum_{c=1}^{C} \text{AP}_c
+$$
+
+A class that is visually ambiguous, underrepresented in training, or easily confused
+with neighbours will have a low AP, pulling the overall mAP down.
+
+<MAPExplorer />
+
+## mAP@0.5 and COCO mAP
+
+In **object detection** a predicted bounding box only counts as a TP if its
+Intersection over Union (IoU) with the matching ground-truth box exceeds a threshold:
+
+$$
+\text{IoU} = \frac{\text{area of overlap}}{\text{area of union}}
+$$
+
+**Pascal VOC** uses IoU $\geq 0.50$ — often written **mAP@0.5**. The stricter
+**COCO** metric averages mAP over ten IoU thresholds from 0.50 to 0.95 in steps of 0.05:
+
+$$
+\text{AP}_{\text{COCO}} = \frac{1}{10} \sum_{t \,\in\, \{0.50,\, 0.55,\, \ldots,\, 0.95\}} \text{mAP}@t
+$$
+
+This rewards detectors that localise boxes precisely — not just ones that drape a large
+box over the right region and call it a day.
+
+## Key takeaways
+
+- **Accuracy** hides class-imbalance failures; precision and recall do not.
+- The **threshold** $\tau$ controls the tradeoff: there is no free lunch between
+  precision and recall.
+- **AP** summarises the full precision-recall curve as a single area — the larger the
+  better.
+- **mAP** averages AP across classes; a weak class drags the whole score down.
+- **COCO mAP** further averages over IoU thresholds, penalising sloppy box localisation.

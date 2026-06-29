@@ -220,6 +220,15 @@ export const TUTORIALS: Tutorial[] = [
     minutes: 8,
   },
   {
+    slug: "precision-recall-map",
+    topic: "deep-learning",
+    title: "Precision, Recall, and mAP",
+    blurb:
+      "Drag a confidence threshold to trace the precision-recall curve — then see how AP and mAP summarise detector quality across classes.",
+    status: "ready",
+    minutes: 9,
+  },
+  {
     slug: "warmup-cosine-scheduler",
     topic: "deep-learning",
     title: "Warmup Cosine Scheduler",

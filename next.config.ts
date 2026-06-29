@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import createMDX from "@next/mdx";
 import remarkMath from "remark-math";
+import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import rehypePrettyCode, { type Options as PrettyCodeOptions } from "rehype-pretty-code";
 
@@ -13,7 +14,7 @@ const prettyCodeOptions: PrettyCodeOptions = {
 const withMDX = createMDX({
   extension: /\.mdx?$/,
   options: {
-    remarkPlugins: [remarkMath],
+    remarkPlugins: [remarkGfm, remarkMath],
     rehypePlugins: [
       [rehypeKatex, { strict: false, output: "htmlAndMathml" }],
       [rehypePrettyCode, prettyCodeOptions],
