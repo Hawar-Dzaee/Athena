@@ -1,5 +1,6 @@
 import { PRCurveViz } from "./components/PRCurveViz";
 import { MAPExplorer } from "./components/MAPExplorer";
+import { ConfidenceNumberLine } from "./components/ConfidenceNumberLine";
 
 # Precision, Recall, and mAP
 
@@ -50,7 +51,10 @@ the curve. AP lies in $[0, 1]$.
 ### Worked example
 
 Suppose there are **5 actual positives** and your model ranks 8 predictions by
-confidence score (highest first):
+confidence score (highest first). Each dot below sits at its confidence score — drag
+the threshold to see how TP, FP, and FN shift:
+
+<ConfidenceNumberLine />
 
 | Rank | Confidence | Label | Running TP | Running FP | Precision $P_k$ | Recall $r_k$ |
 | ---- | :--------: | :---: | :--------: | :--------: | :-------------: | :----------: |
@@ -85,6 +89,17 @@ Notice what the three FPs do: they add nothing to AP themselves, but each one
 increases the denominator $TP + FP$, so the next TP's precision is lower than it would
 have been. A classifier that surfaces all five TPs *before* any FP would score
 AP = 1.0.
+
+### Mathematical Optimization (The Shortcut)
+
+To be even faster, scikit-learn optimizes the equation. Since $(r_k - r_{k-1})$ is
+only greater than zero when we encounter a True Positive, the code can completely skip
+calculating thresholds for steps that result in a False Positive — they contribute zero
+to the sum and can be dropped entirely.
+
+A key fact to carry forward: **AP is inherently a binary metric** — it measures the
+precision-recall tradeoff for a single class against everything else. That limitation
+is exactly what motivates the extension below.
 
 ## Mean Average Precision (mAP)
 
