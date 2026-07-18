@@ -291,6 +291,15 @@ export const TUTORIALS: Tutorial[] = [
     status: "ready",
     minutes: 6,
   },
+  {
+    slug: "cosine-with-warmup",
+    topic: "pytorch",
+    title: "CosineWithWarmup: composing LR schedulers",
+    blurb:
+      "Build a linear-warmup + cosine-annealing schedule by chaining LinearLR and CosineAnnealingLR with SequentialLR — drag total_steps and warmup_ratio to watch the milestone hand-off move.",
+    status: "ready",
+    minutes: 8,
+  },
 ];
 
 export function tutorialPath(t: Tutorial): string {

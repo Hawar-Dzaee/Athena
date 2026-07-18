@@ -1,0 +1,65 @@
+import { CosineWithWarmupExplorer } from "./components/CosineWithWarmupExplorer";
+import { NotationProvider, NotationSwitch, Equation } from "./components/NotationToggle";
+
+# CosineWithWarmup
+
+Two facts about training drive this schedule. Early on, gradients are noisy — the weights are random, and optimizers like Adam are still estimating their moment statistics — so a full-size learning rate can blow the run up in the first few hundred steps. Late in training, you want the learning rate to glide down smoothly to a small floor so the model settles into a minimum instead of bouncing around it. **Linear warmup** handles the first problem, **cosine annealing** handles the second.
+
+The nice part: PyTorch already ships both pieces, plus a dispatcher that chains them. The whole scheduler is five lines of composition.
+
+## The class
+
+```python
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
+
+class CosineWithWarmup:
+    """Linear warmup to the base LR, then cosine annealing down to min_lr."""
+
+    def __init__(self, optimizer, total_steps, warmup_ratio=0.1, min_lr=1e-5):
+        self.optimizer = optimizer
+        self.total_steps = total_steps
+        self.warmup_steps = int(warmup_ratio * total_steps)
+        self.cosine_steps = total_steps - self.warmup_steps
+
+        warmup = LinearLR(
+            optimizer, start_factor=1e-8, end_factor=1.0, total_iters=self.warmup_steps
+        )
+        cosine = CosineAnnealingLR(optimizer, T_max=self.cosine_steps, eta_min=min_lr)
+
+        self.scheduler = SequentialLR(
+            optimizer, schedulers=[warmup, cosine], milestones=[self.warmup_steps]
+        )
+
+    def step(self):
+        self.scheduler.step()
+
+    def get_last_lr(self):
+        return self.scheduler.get_last_lr()
+
+    def state_dict(self):
+        return self.scheduler.state_dict()
+
+    def load_state_dict(self, state_dict):
+        self.scheduler.load_state_dict(state_dict)
+```
+
+Everything after `__init__` is delegation: `step`, `get_last_lr`, `state_dict`, and `load_state_dict` all forward to the wrapped `SequentialLR`. To the training loop, `CosineWithWarmup` quacks exactly like a native PyTorch scheduler.
+
+Put together, the schedule it produces is piecewise — toggle between the code's variable names and compact math notation:
+
+<NotationProvider>
+
+<NotationSwitch />
+
+<Equation
+  code={String.raw`\text{lr} = \begin{cases} \color{#f59e0b} \text{base\_lr} \cdot \left(\text{start\_factor} + (1 - \text{start\_factor}) \cdot \dfrac{\text{step}}{\text{warmup\_steps}}\right) & \color{#f59e0b} \text{step} < \text{warmup\_steps} \\[12pt] \color{#6366f1} \text{min\_lr} + \tfrac{1}{2}(\text{base\_lr} - \text{min\_lr})\!\left(1 + \cos\!\left(\pi \cdot \dfrac{\text{step} - \text{warmup\_steps}}{\text{cosine\_steps}}\right)\right) & \color{#6366f1} \text{otherwise} \end{cases}`}
+  math={String.raw`\Large \eta_t = \begin{cases} \color{#f59e0b} \eta_{\text{peak}} \cdot \dfrac{t}{T_{\text{warm}}} & \color{#f59e0b} t < T_{\text{warm}} \\[12pt] \color{#6366f1} \eta_{\min} + \tfrac{1}{2}(\eta_{\text{peak}} - \eta_{\min})\!\left(1 + \cos\!\left(\pi \cdot \dfrac{t - T_{\text{warm}}}{T_{\text{total}} - T_{\text{warm}}}\right)\right) & \color{#6366f1} \text{otherwise} \end{cases}`}
+/>
+
+</NotationProvider>
+
+(The math form drops `start_factor` $= 10^{-8}$ — it exists only because PyTorch requires it to be positive, and at that size it's indistinguishable from zero.)
+
+Drag the constructor arguments and watch the schedule reshape. The badges above the chart show exactly what `__init__` computes from them, and hovering the curve reveals which child scheduler is active at that step:
+
+<CosineWithWarmupExplorer />
